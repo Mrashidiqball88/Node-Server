@@ -1,5 +1,9 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import {
+  closeMongoDB,
+  connectToMongoDB,
+} from "./lib/mongodb";
 
 const rawPort = process.env["PORT"];
 
@@ -11,15 +15,41 @@ if (!rawPort) {
 
 const port = Number(rawPort);
 
-if (Number.isNaN(port) || port <= 0) {
+if (!Number.isInteger(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
+async function startServer(): Promise<void> {
+  try {
+    await connectToMongoDB();
+
+    const server = app.listen(port, () => {
+      logger.info({ port }, "Server listening");
+    });
+
+    const shutdown = async (signal: string) => {
+      logger.info({ signal }, "Shutdown signal received");
+      server.close(async (err) => {
+        if (err) {
+          logger.error({ err }, "Error closing HTTP server");
+          process.exitCode = 1;
+        }
+
+        try {
+          await closeMongoDB();
+        } catch (closeError) {
+          logger.error({ err: closeError }, "Error closing MongoDB connection");
+          process.exitCode = 1;
+        }
+      });
+    };
+
+    process.once("SIGINT", () => void shutdown("SIGINT"));
+    process.once("SIGTERM", () => void shutdown("SIGTERM"));
+  } catch (err) {
+    logger.error({ err }, "Unable to connect to MongoDB");
     process.exit(1);
   }
+}
 
-  logger.info({ port }, "Server listening");
-});
+void startServer();
