@@ -37,8 +37,6 @@ export const SignUpResponse = zod.object({
   "createdAt": zod.coerce.date()
 })
 })
-
-
 /**
  * @summary Log in to an existing account
  */
@@ -59,8 +57,6 @@ export const LogInResponse = zod.object({
   "createdAt": zod.coerce.date()
 })
 })
-
-
 /**
  * @summary Get the authenticated user
  */
@@ -71,3 +67,109 @@ export const GetCurrentUserResponse = zod.object({
   "createdAt": zod.coerce.date()
 })
 })
+
+
+/**
+ * @summary Create a ride request
+ */
+export const createRideBodyPickupLocationLatitudeMin = -90;
+export const createRideBodyPickupLocationLatitudeMax = 90;
+
+export const createRideBodyPickupLocationLongitudeMin = -180;
+export const createRideBodyPickupLocationLongitudeMax = 180;
+
+export const createRideBodyDropoffLocationLatitudeMin = -90;
+export const createRideBodyDropoffLocationLatitudeMax = 90;
+
+export const createRideBodyDropoffLocationLongitudeMin = -180;
+export const createRideBodyDropoffLocationLongitudeMax = 180;
+
+export const createRideBodyFareMin = 0;
+
+
+
+export const CreateRideBody = zod.object({
+  "pickupLocation": zod.object({
+  "latitude": zod.number().min(createRideBodyPickupLocationLatitudeMin).max(createRideBodyPickupLocationLatitudeMax),
+  "longitude": zod.number().min(createRideBodyPickupLocationLongitudeMin).max(createRideBodyPickupLocationLongitudeMax)
+}),
+  "dropoffLocation": zod.object({
+  "latitude": zod.number().min(createRideBodyDropoffLocationLatitudeMin).max(createRideBodyDropoffLocationLatitudeMax),
+  "longitude": zod.number().min(createRideBodyDropoffLocationLongitudeMin).max(createRideBodyDropoffLocationLongitudeMax)
+}),
+  "fare": zod.number().min(createRideBodyFareMin)
+})
+
+export const createRideResponseRidePickupLocationLatitudeMin = -90;
+export const createRideResponseRidePickupLocationLatitudeMax = 90;
+
+export const createRideResponseRidePickupLocationLongitudeMin = -180;
+export const createRideResponseRidePickupLocationLongitudeMax = 180;
+
+export const createRideResponseRideDropoffLocationLatitudeMin = -90;
+export const createRideResponseRideDropoffLocationLatitudeMax = 90;
+
+export const createRideResponseRideDropoffLocationLongitudeMin = -180;
+export const createRideResponseRideDropoffLocationLongitudeMax = 180;
+
+
+
+export const CreateRideResponse = zod.object({
+  "ride": zod.object({
+  "id": zod.string(),
+  "pickupLocation": zod.object({
+  "latitude": zod.number().min(createRideResponseRidePickupLocationLatitudeMin).max(createRideResponseRidePickupLocationLatitudeMax),
+  "longitude": zod.number().min(createRideResponseRidePickupLocationLongitudeMin).max(createRideResponseRidePickupLocationLongitudeMax)
+}),
+  "dropoffLocation": zod.object({
+  "latitude": zod.number().min(createRideResponseRideDropoffLocationLatitudeMin).max(createRideResponseRideDropoffLocationLatitudeMax),
+  "longitude": zod.number().min(createRideResponseRideDropoffLocationLongitudeMin).max(createRideResponseRideDropoffLocationLongitudeMax)
+}),
+  "fare": zod.number(),
+  "status": zod.enum(['requested', 'accepted']),
+  "passengerId": zod.string(),
+  "driverId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullable()
+})
+})
+/**
+ * @summary Accept a ride request as a driver
+ */
+export const AcceptRideParams = zod.object({
+  "rideId": zod.coerce.string()
+})
+
+export const acceptRideResponseRidePickupLocationLatitudeMin = -90;
+export const acceptRideResponseRidePickupLocationLatitudeMax = 90;
+
+export const acceptRideResponseRidePickupLocationLongitudeMin = -180;
+export const acceptRideResponseRidePickupLocationLongitudeMax = 180;
+
+export const acceptRideResponseRideDropoffLocationLatitudeMin = -90;
+export const acceptRideResponseRideDropoffLocationLatitudeMax = 90;
+
+export const acceptRideResponseRideDropoffLocationLongitudeMin = -180;
+export const acceptRideResponseRideDropoffLocationLongitudeMax = 180;
+
+
+
+export const AcceptRideResponse = zod.object({
+  "ride": zod.object({
+  "id": zod.string(),
+  "pickupLocation": zod.object({
+  "latitude": zod.number().min(acceptRideResponseRidePickupLocationLatitudeMin).max(acceptRideResponseRidePickupLocationLatitudeMax),
+  "longitude": zod.number().min(acceptRideResponseRidePickupLocationLongitudeMin).max(acceptRideResponseRidePickupLocationLongitudeMax)
+}),
+  "dropoffLocation": zod.object({
+  "latitude": zod.number().min(acceptRideResponseRideDropoffLocationLatitudeMin).max(acceptRideResponseRideDropoffLocationLatitudeMax),
+  "longitude": zod.number().min(acceptRideResponseRideDropoffLocationLongitudeMin).max(acceptRideResponseRideDropoffLocationLongitudeMax)
+}),
+  "fare": zod.number(),
+  "status": zod.enum(['requested', 'accepted']),
+  "passengerId": zod.string(),
+  "driverId": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullable()
+ })
+ })

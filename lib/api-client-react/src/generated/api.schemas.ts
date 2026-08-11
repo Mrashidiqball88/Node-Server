@@ -29,3 +29,49 @@ export interface AuthResponse {
   token: string;
   user: User;
 }
+
+export interface Location {
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  latitude: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  longitude: number;
+}
+
+export interface CreateRideRequest {
+  pickupLocation: Location;
+  dropoffLocation: Location;
+  /** @minimum 0 */
+  fare: number;
+}
+
+export type RideStatus = typeof RideStatus[keyof typeof RideStatus];
+
+
+export const RideStatus = {
+  requested: 'requested',
+  accepted: 'accepted',
+} as const;
+
+export interface Ride {
+  id: string;
+  pickupLocation: Location;
+  dropoffLocation: Location;
+  fare: number;
+  status: RideStatus;
+  passengerId: string;
+  /** @nullable */
+  driverId: string | null;
+  createdAt: string;
+  /** @nullable */
+  acceptedAt: string | null;
+}
+
+export interface RideResponse {
+  ride: Ride;
+}

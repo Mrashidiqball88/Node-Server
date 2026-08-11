@@ -8,6 +8,11 @@
 
 export * from './authCredentials';
 export * from './authResponse';
+export * from './createRideRequest';
 export * from './healthStatus';
+export * from './location';
+export * from './ride';
+export * from './rideResponse';
+export * from './rideStatus';
 export * from './user';
 export * from './userResponse';

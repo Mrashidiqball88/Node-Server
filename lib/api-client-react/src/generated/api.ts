@@ -22,7 +22,9 @@ import type {
 import type {
   AuthCredentials,
   AuthResponse,
+  CreateRideRequest,
   HealthStatus,
+  RideResponse,
   UserResponse
 } from './api.schemas';
 
@@ -124,6 +126,13 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
 export const getSignUpUrl = () => {
 
 
@@ -336,3 +345,151 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
+export const getCreateRideUrl = () => {
+
+
+
+
+  return `/api/rides`
+}
+
+/**
+ * @summary Create a ride request
+ */
+export const createRide = async (createRideRequest: CreateRideRequest, options?: Parameters<typeof customFetch>[1]): Promise<RideResponse> => {
+
+  return customFetch<RideResponse>(getCreateRideUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createRideRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateRideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRide>>, TError,{data: BodyType<CreateRideRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createRide>>, TError,{data: BodyType<CreateRideRequest>}, TContext> => {
+
+const mutationKey = ['createRide'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRide>>, {data: BodyType<CreateRideRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createRide(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateRideMutationResult = NonNullable<Awaited<ReturnType<typeof createRide>>>
+    export type CreateRideMutationBody = BodyType<CreateRideRequest>
+    export type CreateRideMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a ride request
+ */
+export const useCreateRide = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRide>>, TError,{data: BodyType<CreateRideRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createRide>>,
+        TError,
+        {data: BodyType<CreateRideRequest>},
+        TContext
+      > => {
+      return useMutation(getCreateRideMutationOptions(options));
+    }
+
+export const getAcceptRideUrl = (rideId: string,) => {
+
+
+
+
+  return `/api/rides/${rideId}/accept`
+}
+
+/**
+ * @summary Accept a ride request as a driver
+ */
+export const acceptRide = async (rideId: string, options?: Parameters<typeof customFetch>[1]): Promise<RideResponse> => {
+
+  return customFetch<RideResponse>(getAcceptRideUrl(rideId),
+  {
+    ...options,
+    method: 'PATCH'
+
+
+  }
+);}
+
+
+
+
+
+export const getAcceptRideMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptRide>>, TError,{rideId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptRide>>, TError,{rideId: string}, TContext> => {
+
+const mutationKey = ['acceptRide'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptRide>>, {rideId: string}> = (props) => {
+          const {rideId} = props ?? {};
+
+          return  acceptRide(rideId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptRideMutationResult = NonNullable<Awaited<ReturnType<typeof acceptRide>>>
+
+    export type AcceptRideMutationError = ErrorType<void>
+
+    /**
+ * @summary Accept a ride request as a driver
+ */
+export const useAcceptRide = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptRide>>, TError,{rideId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acceptRide>>,
+        TError,
+        {rideId: string},
+        TContext
+      > => {
+      return useMutation(getAcceptRideMutationOptions(options));
+    }
