@@ -60,6 +60,14 @@ export async function connectToMongoDB(): Promise<Db> {
   return database;
 }
 
+export function getMongoDB(): Db {
+  if (!database) {
+    throw new Error("MongoDB is not connected.");
+  }
+
+  return database;
+}
+
 export function isMongoDBConnected(): boolean {
   return database !== undefined;
 }

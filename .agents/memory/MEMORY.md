@@ -1,1 +1,2 @@
 - [MongoDB URI credentials](mongodb-uri-credentials.md) — preserve compatibility with raw special characters in MongoDB usernames and passwords.
+- [API codegen and Zod](api-codegen-zod.md) — keep generated Zod validators aligned with the generator’s major version.
