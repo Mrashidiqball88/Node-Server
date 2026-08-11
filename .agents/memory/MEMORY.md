@@ -1,0 +1,1 @@
+- [MongoDB URI credentials](mongodb-uri-credentials.md) — preserve compatibility with raw special characters in MongoDB usernames and passwords.

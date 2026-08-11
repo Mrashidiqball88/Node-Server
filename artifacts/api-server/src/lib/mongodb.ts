@@ -9,7 +9,41 @@ if (!mongoUri) {
   );
 }
 
-export const mongoClient = new MongoClient(mongoUri, {
+function normalizeMongoUri(uri: string): string {
+  const schemeEnd = uri.indexOf("://");
+  if (schemeEnd === -1) {
+    return uri;
+  }
+
+  const authorityStart = schemeEnd + 3;
+  const userInfoSeparator = uri.lastIndexOf("@");
+
+  if (userInfoSeparator < authorityStart) {
+    return uri;
+  }
+
+  const userInfo = uri.slice(authorityStart, userInfoSeparator);
+  const passwordSeparator = userInfo.indexOf(":");
+
+  if (passwordSeparator === -1) {
+    return uri;
+  }
+
+  const username = userInfo.slice(0, passwordSeparator);
+  const password = userInfo.slice(passwordSeparator + 1);
+
+  const normalizeCredential = (credential: string): string =>
+    credential.replace(/%[0-9a-f]{2}|./giu, (character) =>
+      character.startsWith("%")
+        ? character.toUpperCase()
+        : encodeURIComponent(character),
+    );
+
+  const normalizedUserInfo = `${normalizeCredential(username)}:${normalizeCredential(password)}`;
+  return `${uri.slice(0, authorityStart)}${normalizedUserInfo}${uri.slice(userInfoSeparator)}`;
+}
+
+export const mongoClient = new MongoClient(normalizeMongoUri(mongoUri), {
   serverSelectionTimeoutMS: 5_000,
 });
 
