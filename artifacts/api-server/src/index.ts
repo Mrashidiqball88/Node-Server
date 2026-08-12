@@ -1,9 +1,11 @@
+import { createServer } from "node:http";
 import app from "./app";
 import { logger } from "./lib/logger";
 import {
   closeMongoDB,
   connectToMongoDB,
 } from "./lib/mongodb";
+import { initializeRealtime } from "./realtime";
 
 const rawPort = process.env["PORT"];
 
@@ -23,7 +25,9 @@ async function startServer(): Promise<void> {
   try {
     await connectToMongoDB();
 
-    const server = app.listen(port, () => {
+    const server = createServer(app);
+    initializeRealtime(server);
+    server.listen(port, () => {
       logger.info({ port }, "Server listening");
     });
 

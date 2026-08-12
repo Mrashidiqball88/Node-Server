@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middleware/auth";
 import { getMongoDB } from "../lib/mongodb";
+import { emitRideStatus } from "../realtime";
 import {
   getRidesCollection,
   toPublicRide,
@@ -43,6 +44,8 @@ router.post("/rides", requireAuth, async (req, res) => {
     status: "requested",
     passengerId,
     driverId: null,
+    driverLocation: null,
+    locationUpdatedAt: null,
     createdAt: new Date(),
     acceptedAt: null,
   };
@@ -51,6 +54,7 @@ router.post("/rides", requireAuth, async (req, res) => {
   await rides.insertOne(ride);
 
   const response = CreateRideResponse.parse({ ride: toPublicRide(ride) });
+  emitRideStatus(ride);
   res.status(201).json(response);
 });
 
@@ -118,6 +122,7 @@ router.patch("/rides/:rideId/accept", requireAuth, async (req, res) => {
   const response = AcceptRideResponse.parse({
     ride: toPublicRide(acceptedRide),
   });
+  emitRideStatus(acceptedRide);
   res.json(response);
 });
 

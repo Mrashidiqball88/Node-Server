@@ -31,11 +31,7 @@ export function requireAuth(
   }
 
   try {
-    const payload = jwt.verify(token, jwtSecret);
-    const userId =
-      typeof payload === "string"
-        ? undefined
-        : (payload as JwtPayload).sub;
+    const userId = verifyAuthToken(token);
 
     if (!userId) {
       res.status(401).json({ message: "Invalid authentication token." });
@@ -46,6 +42,17 @@ export function requireAuth(
     next();
   } catch {
     res.status(401).json({ message: "Invalid or expired authentication token." });
+  }
+}
+
+export function verifyAuthToken(token: string): string | undefined {
+  try {
+    const payload = jwt.verify(token, jwtSecret);
+    return typeof payload === "string"
+      ? undefined
+      : (payload as JwtPayload).sub;
+  } catch {
+    return undefined;
   }
 }
 

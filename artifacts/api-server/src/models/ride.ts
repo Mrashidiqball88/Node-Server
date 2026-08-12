@@ -1,6 +1,11 @@
 import { ObjectId, type Collection, type Db } from "mongodb";
 
-export type RideStatus = "requested" | "accepted";
+export type RideStatus =
+  | "requested"
+  | "accepted"
+  | "arrived"
+  | "in-progress"
+  | "completed";
 
 export interface Location {
   latitude: number;
@@ -15,6 +20,8 @@ export interface RideDocument {
   status: RideStatus;
   passengerId: string;
   driverId: string | null;
+  driverLocation: Location | null;
+  locationUpdatedAt: Date | null;
   createdAt: Date;
   acceptedAt: Date | null;
 }
@@ -27,6 +34,8 @@ export interface PublicRide {
   status: RideStatus;
   passengerId: string;
   driverId: string | null;
+  driverLocation: Location | null;
+  locationUpdatedAt: Date | null;
   createdAt: Date;
   acceptedAt: Date | null;
 }
@@ -55,6 +64,8 @@ export function toPublicRide(ride: RideDocument): PublicRide {
     status: ride.status,
     passengerId: ride.passengerId,
     driverId: ride.driverId,
+    driverLocation: ride.driverLocation ?? null,
+    locationUpdatedAt: ride.locationUpdatedAt ?? null,
     createdAt: ride.createdAt,
     acceptedAt: ride.acceptedAt,
   };

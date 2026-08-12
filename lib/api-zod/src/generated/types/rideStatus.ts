@@ -12,4 +12,7 @@ export type RideStatus = typeof RideStatus[keyof typeof RideStatus];
 export const RideStatus = {
   requested: 'requested',
   accepted: 'accepted',
+  arrived: 'arrived',
+  'in-progress': 'in-progress',
+  completed: 'completed',
 } as const;

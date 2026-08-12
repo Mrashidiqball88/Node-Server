@@ -17,6 +17,9 @@ export interface Ride {
   passengerId: string;
   /** @nullable */
   driverId: string | null;
+  driverLocation: Location | null;
+  /** @nullable */
+  locationUpdatedAt: Date | null;
   createdAt: Date;
   /** @nullable */
   acceptedAt: Date | null;

@@ -239,13 +239,22 @@ components:
           type: number
         status:
           type: string
-          enum: [requested, accepted]
+          enum: [requested, accepted, arrived, in-progress, completed]
         passengerId:
           type: string
         driverId:
           type:
             - string
             - "null"
+        driverLocation:
+          anyOf:
+            - $ref: "#/components/schemas/Location"
+            - type: "null"
+        locationUpdatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -262,6 +271,8 @@ components:
         - status
         - passengerId
         - driverId
+        - driverLocation
+        - locationUpdatedAt
         - createdAt
         - acceptedAt
     RideResponse:

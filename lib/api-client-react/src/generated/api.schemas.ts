@@ -56,6 +56,9 @@ export type RideStatus = typeof RideStatus[keyof typeof RideStatus];
 export const RideStatus = {
   requested: 'requested',
   accepted: 'accepted',
+  arrived: 'arrived',
+  'in-progress': 'in-progress',
+  completed: 'completed',
 } as const;
 
 export interface Ride {
@@ -67,6 +70,9 @@ export interface Ride {
   passengerId: string;
   /** @nullable */
   driverId: string | null;
+  driverLocation: Location | null;
+  /** @nullable */
+  locationUpdatedAt: string | null;
   createdAt: string;
   /** @nullable */
   acceptedAt: string | null;
