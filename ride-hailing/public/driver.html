@@ -224,8 +224,12 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .photo-file-input{width:100%;background:#13131a;border:1px dashed #333;border-radius:8px;padding:.45rem .6rem;color:#888;font-size:.78rem;cursor:pointer}
 .photo-file-input::-webkit-file-upload-button{background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:.2rem .5rem;font-size:.72rem;cursor:pointer}
 /* ── Call Passenger ── */
-.btn-call-pass{display:block;width:100%;background:#052a10;border:1px solid #4caf50;color:#4caf50;border-radius:10px;padding:.65rem;font-size:.9rem;font-weight:700;text-align:center;text-decoration:none;margin-bottom:.5rem}
+.ap-dual-btns{display:flex;gap:.45rem;margin-bottom:.5rem}
+.btn-call-pass,.btn-wa-pass{flex:1;border-radius:10px;padding:.65rem;font-size:.85rem;font-weight:700;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:.3rem}
+.btn-call-pass{background:#052a10;border:1px solid #4caf50;color:#4caf50}
 .btn-call-pass:hover{background:#0a3a18}
+.btn-wa-pass{background:#0d2b1a;border:1px solid #25d366;color:#25d366}
+.btn-wa-pass:hover{background:#113520}
 /* ── Support FAB ── */
 .support-fab{position:fixed;bottom:78px;right:10px;background:#13131a;border:1px solid #333;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.5)}
 .support-fab:hover{border-color:#f5c518}
@@ -938,12 +942,18 @@ function showActivePanel(ride) {
   document.getElementById('ap-pickup').textContent         = ride.pickupLocation?.address  || 'Pickup';
   document.getElementById('ap-dropoff').textContent        = ride.dropoffLocation?.address || 'Dropoff';
 
-  // Call Passenger button
-  const phone = ride.passenger?.phone;
+  // Dual call buttons — Phone + WhatsApp
+  const rawPhone = ride.passenger?.phone || '';
+  const digits   = rawPhone.replace(/\D/g, '');
+  const telPhone = digits ? (digits.startsWith('92') ? `+${digits}` : `+92${digits.replace(/^0/, '')}`) : '';
+  const waPhone  = digits ? (digits.startsWith('92') ? digits : `92${digits.replace(/^0/, '')}`) : '';
   const callEl = document.getElementById('ap-call-passenger');
   if (callEl) {
-    callEl.innerHTML = phone
-      ? `<a class="btn-call-pass" href="tel:${phone}">📞 Call Passenger — ${phone}</a>`
+    callEl.innerHTML = telPhone
+      ? `<div class="ap-dual-btns">
+           <a class="btn-call-pass" href="tel:${telPhone}">📞 Phone Call</a>
+           <a class="btn-wa-pass"   href="https://wa.me/${waPhone}" target="_blank" rel="noopener">💬 WhatsApp</a>
+         </div>`
       : '';
   }
   renderActiveButtons('accepted');

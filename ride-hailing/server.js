@@ -479,7 +479,7 @@ app.patch('/api/rides/:id/accept', authMiddleware, async (req, res) => {
     if (!ride) return res.status(409).json({ error: 'Ride no longer available' });
 
     // Fetch full driver profile for the acceptance payload
-    const driverUser = await User.findById(req.user.id).select('name phone vehicleType vehicleModel vehiclePlate rating');
+    const driverUser = await User.findById(req.user.id).select('name phone vehicleType vehicleModel vehiclePlate rating profilePhoto');
     io.to(`ride:${ride._id}`).emit('ride:accepted', {
       rideId: ride._id,
       driver: {
@@ -489,7 +489,8 @@ app.patch('/api/rides/:id/accept', authMiddleware, async (req, res) => {
         vehicleType:  driverUser.vehicleType,
         vehicleModel: driverUser.vehicleModel || '',
         vehiclePlate: driverUser.vehiclePlate || '',
-        rating:       driverUser.rating || 5.0
+        rating:       driverUser.rating || 5.0,
+        profilePhoto: driverUser.profilePhoto || ''
       }
     });
     io.to('drivers-online').emit('ride:taken', { rideId: ride._id });
@@ -626,7 +627,7 @@ app.patch('/api/rides/:id/accept-driver', authMiddleware, async (req, res) => {
       await ride.save();
     }
 
-    const driverUser = await User.findById(driverId).select('name phone vehicleType vehicleModel vehiclePlate rating');
+    const driverUser = await User.findById(driverId).select('name phone vehicleType vehicleModel vehiclePlate rating profilePhoto');
     io.to(`ride:${ride._id}`).emit('ride:accepted', {
       rideId: ride._id,
       driver: {
@@ -636,7 +637,8 @@ app.patch('/api/rides/:id/accept-driver', authMiddleware, async (req, res) => {
         vehicleType:  driverUser.vehicleType,
         vehicleModel: driverUser.vehicleModel || '',
         vehiclePlate: driverUser.vehiclePlate || '',
-        rating:       driverUser.rating || 5.0
+        rating:       driverUser.rating || 5.0,
+        profilePhoto: driverUser.profilePhoto || ''
       }
     });
     io.to('drivers-online').emit('ride:taken', { rideId: ride._id });

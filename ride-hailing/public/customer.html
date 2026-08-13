@@ -183,7 +183,8 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 /* ── Matched driver card ── */
 .matched-card{background:#0d1117;border:1px solid #1e3a5f;border-radius:13px;padding:.8rem;margin:.4rem 0}
 .matched-top{display:flex;align-items:center;gap:.65rem;margin-bottom:.55rem}
-.matched-avatar{width:40px;height:40px;background:#1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;flex-shrink:0}
+.matched-avatar{width:52px;height:52px;background:#1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2rem;flex-shrink:0;overflow:hidden}
+.matched-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 .matched-info{flex:1;min-width:0}
 .matched-name{font-size:.95rem;font-weight:700}
 .matched-vehicle-row{font-size:.75rem;color:#888;margin-top:.1rem}
@@ -193,11 +194,11 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .matched-fare-val{font-size:1rem;font-weight:800;color:#f5c518}
 .matched-pay-row{font-size:.75rem;color:#666;padding:.2rem 0}
 .contact-btns{display:flex;gap:.45rem;margin:.5rem 0}
-.btn-call,.btn-msg{flex:1;border-radius:10px;padding:.6rem;font-size:.82rem;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:.3rem}
+.btn-call,.btn-whatsapp{flex:1;border-radius:10px;padding:.6rem;font-size:.82rem;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:.3rem}
 .btn-call{background:#1a3a1a;border:1px solid #2d5a2d;color:#4caf50}
 .btn-call:hover{background:#1e4a1e}
-.btn-msg{background:#1a1a3a;border:1px solid #2d2d5a;color:#66aaff}
-.btn-msg:hover{background:#1e1e4a}
+.btn-whatsapp{background:#0d2b1a;border:1px solid #25d366;color:#25d366}
+.btn-whatsapp:hover{background:#113520}
 
 /* ── empty-msg shared ── */
 .empty-msg{text-align:center;color:#444;padding:2rem;font-size:.9rem}
@@ -1240,7 +1241,13 @@ function showMatchedPanel(driver, agreedFare) {
   document.getElementById('ar-waiting').style.display = 'none';
   document.getElementById('ar-matched').style.display = 'block';
   document.getElementById('ar-status-text').textContent = 'Driver on the way! 🚗';
-  document.getElementById('ar-avatar').textContent = (driver.name || '?')[0].toUpperCase();
+  // Driver avatar — show profile photo if available, else initial letter
+  const avatarEl = document.getElementById('ar-avatar');
+  if (driver.profilePhoto) {
+    avatarEl.innerHTML = `<img src="${driver.profilePhoto}" alt="Driver">`;
+  } else {
+    avatarEl.textContent = (driver.name || '?')[0].toUpperCase();
+  }
   document.getElementById('ar-driver-name').textContent = driver.name || '—';
   document.getElementById('ar-driver-vehicle').textContent = [driver.vehicleType, driver.vehicleModel].filter(Boolean).join(' · ') || '—';
   document.getElementById('ar-driver-plate').textContent = driver.vehiclePlate || '—';
@@ -1248,11 +1255,13 @@ function showMatchedPanel(driver, agreedFare) {
   document.getElementById('ar-fare').textContent = `Rs ${(agreedFare || 0).toLocaleString()}`;
   document.getElementById('ar-payment').textContent = '💵 Cash (direct)';
 
-  // Call / Message buttons (using driver phone)
-  const phone = driver.phone ? driver.phone.replace(/\D/g, '').replace(/^0/, '+92') : '';
-  const contactHtml = phone
-    ? `<a class="btn-call" href="tel:${phone}">📞 Call Driver</a>
-       <a class="btn-msg"  href="sms:${phone}">💬 Message</a>`
+  // Dual call buttons — Phone + WhatsApp
+  const digits = driver.phone ? driver.phone.replace(/\D/g, '') : '';
+  const telPhone = digits ? (digits.startsWith('92') ? `+${digits}` : `+92${digits.replace(/^0/, '')}`) : '';
+  const waPhone  = digits ? (digits.startsWith('92') ? digits : `92${digits.replace(/^0/, '')}`) : '';
+  const contactHtml = telPhone
+    ? `<a class="btn-call"      href="tel:${telPhone}">📞 Phone Call</a>
+       <a class="btn-whatsapp"  href="https://wa.me/${waPhone}" target="_blank" rel="noopener">💬 WhatsApp</a>`
     : `<div style="font-size:.78rem;color:#555;text-align:center;flex:1">Contact details not available</div>`;
   document.getElementById('ar-contact-btns').innerHTML = contactHtml;
 }
