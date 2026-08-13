@@ -6,6 +6,10 @@ localPort = 3000
 externalPort = 3001
 
 [[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
 localPort = 8081
 externalPort = 80
 
@@ -41,3 +45,7 @@ outputType = "console"
 deploymentTarget = "autoscale"
 run = ["node", "ride-hailing/server.js"]
 build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
