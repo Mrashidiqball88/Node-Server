@@ -56,7 +56,9 @@ const userSchema = new mongoose.Schema({
   password:{ type: String, required: true },
   phone:   { type: String, default: '' },
   role:    { type: String, enum: ['customer', 'driver'], default: 'customer' },
-  vehicleType: { type: String, enum: ['Bike', 'Rickshaw', 'Car Mini', 'Car AC', ''], default: '' },
+  vehicleType:  { type: String, enum: ['Bike', 'Rickshaw', 'Car Mini', 'Car AC', ''], default: '' },
+  vehicleModel: { type: String, default: '' },  // e.g. "Suzuki Cultus"
+  vehiclePlate: { type: String, default: '' },  // e.g. "LHR-1234"
   isOnline: { type: Boolean, default: false },
   isAdmin:  { type: Boolean, default: false },
   currentLocation: {
@@ -94,7 +96,17 @@ const rideSchema = new mongoose.Schema({
   vehicleType:   { type: String, default: 'Car Mini' },
   notes:         { type: String, default: '' },
   paymentMethod: { type: String, enum: ['cash', 'easypaisa', 'jazzcash', 'wallet'], default: 'cash' },
-  mobileAccount: { type: String, default: '' }
+  mobileAccount: { type: String, default: '' },
+  counterOffers: [{
+    driver:       { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    driverName:   String,
+    vehicleModel: String,
+    vehiclePlate: String,
+    rating:       Number,
+    price:        Number,
+    type:         { type: String, enum: ['accept', 'counter'], default: 'accept' },
+    timestamp:    { type: Date, default: Date.now }
+  }]
 }, { timestamps: true });
 
 const walletSchema = new mongoose.Schema({
@@ -177,7 +189,7 @@ async function adminMiddleware(req, res, next) {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, phone, role, vehicleType } = req.body;
+    const { name, email, password, phone, role, vehicleType, vehicleModel, vehiclePlate } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email and password are required' });
     }
@@ -187,9 +199,11 @@ app.post('/api/auth/register', async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
     const user = await User.create({
       name, email, password: hash,
-      phone:       phone       || '',
-      role:        role        || 'customer',
-      vehicleType: vehicleType || ''
+      phone:        phone        || '',
+      role:         role         || 'customer',
+      vehicleType:  vehicleType  || '',
+      vehicleModel: vehicleModel || '',
+      vehiclePlate: vehiclePlate || ''
     });
     await Wallet.create({ user: user._id, balance: 0, transactions: [] });
 
@@ -199,7 +213,8 @@ app.post('/api/auth/register', async (req, res) => {
     );
     res.status(201).json({
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, vehicleType: user.vehicleType }
+      user: { id: user._id, name: user.name, email: user.email, role: user.role,
+              vehicleType: user.vehicleType, vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -220,7 +235,9 @@ app.post('/api/auth/login', async (req, res) => {
     );
     res.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, vehicleType: user.vehicleType }
+      user: { id: user._id, name: user.name, email: user.email, role: user.role,
+              vehicleType: user.vehicleType, vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate,
+              phone: user.phone, rating: user.rating }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -326,9 +343,19 @@ app.patch('/api/rides/:id/accept', authMiddleware, async (req, res) => {
 
     if (!ride) return res.status(409).json({ error: 'Ride no longer available' });
 
+    // Fetch full driver profile for the acceptance payload
+    const driverUser = await User.findById(req.user.id).select('name phone vehicleType vehicleModel vehiclePlate rating');
     io.to(`ride:${ride._id}`).emit('ride:accepted', {
-      rideId:  ride._id,
-      driver:  { id: req.user.id, name: req.user.name }
+      rideId: ride._id,
+      driver: {
+        id:           req.user.id,
+        name:         driverUser.name,
+        phone:        driverUser.phone || '',
+        vehicleType:  driverUser.vehicleType,
+        vehicleModel: driverUser.vehicleModel || '',
+        vehiclePlate: driverUser.vehiclePlate || '',
+        rating:       driverUser.rating || 5.0
+      }
     });
     io.to('drivers-online').emit('ride:taken', { rideId: ride._id });
 
@@ -392,6 +419,118 @@ app.patch('/api/rides/:id/cancel', authMiddleware, async (req, res) => {
     ride.status = 'cancelled';
     await ride.save();
     io.to(`ride:${ride._id}`).emit('ride:status', { rideId: ride._id, status: 'cancelled' });
+    res.json(ride);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/rides/:id/counter — driver submits an offer or counter-offer
+app.patch('/api/rides/:id/counter', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'driver') return res.status(403).json({ error: 'Drivers only' });
+    const { price, type } = req.body;           // type: 'accept' | 'counter'
+    if (!price || price < 1) return res.status(400).json({ error: 'Valid price required' });
+
+    const ride = await Ride.findOne({ _id: req.params.id, status: 'requested' });
+    if (!ride) return res.status(404).json({ error: 'Ride not available' });
+
+    // Prevent duplicate offers from same driver
+    const already = ride.counterOffers.some(o => String(o.driver) === String(req.user.id));
+    if (already) return res.status(409).json({ error: 'You already sent an offer for this ride' });
+
+    const driver = await User.findById(req.user.id).select('name vehicleModel vehiclePlate rating');
+    const offer = {
+      driver:       req.user.id,
+      driverName:   driver.name,
+      vehicleModel: driver.vehicleModel || '',
+      vehiclePlate: driver.vehiclePlate || '',
+      rating:       driver.rating || 5.0,
+      price:        Number(price),
+      type:         type === 'counter' ? 'counter' : 'accept',
+      timestamp:    new Date()
+    };
+    ride.counterOffers.push(offer);
+    await ride.save();
+
+    // Emit updated offers list to the customer
+    io.to(`ride:${ride._id}`).emit('ride:offers', ride.counterOffers.map(o => ({
+      driverId:     String(o.driver),
+      driverName:   o.driverName,
+      vehicleModel: o.vehicleModel,
+      vehiclePlate: o.vehiclePlate,
+      rating:       o.rating,
+      price:        o.price,
+      type:         o.type,
+      timestamp:    o.timestamp
+    })));
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/rides/:id/accept-driver — customer selects a specific driver
+app.patch('/api/rides/:id/accept-driver', authMiddleware, async (req, res) => {
+  try {
+    const { driverId } = req.body;
+    if (!driverId) return res.status(400).json({ error: 'driverId required' });
+
+    const ride = await Ride.findOneAndUpdate(
+      { _id: req.params.id, passenger: req.user.id, status: 'requested', driver: null },
+      { $set: { driver: driverId, status: 'accepted' } },
+      { new: true }
+    ).populate('passenger', 'name phone');
+    if (!ride) return res.status(409).json({ error: 'Ride no longer available' });
+
+    // Find the agreed price from the offer
+    const offer = ride.counterOffers.find(o => String(o.driver) === String(driverId));
+    if (offer && offer.price && offer.price !== ride.fare) {
+      ride.fare = offer.price;
+      await ride.save();
+    }
+
+    const driverUser = await User.findById(driverId).select('name phone vehicleType vehicleModel vehiclePlate rating');
+    io.to(`ride:${ride._id}`).emit('ride:accepted', {
+      rideId: ride._id,
+      driver: {
+        id:           String(driverId),
+        name:         driverUser.name,
+        phone:        driverUser.phone || '',
+        vehicleType:  driverUser.vehicleType,
+        vehicleModel: driverUser.vehicleModel || '',
+        vehiclePlate: driverUser.vehiclePlate || '',
+        rating:       driverUser.rating || 5.0
+      }
+    });
+    io.to('drivers-online').emit('ride:taken', { rideId: ride._id });
+
+    res.json(ride);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/rides/:id/update-fare — customer raises their offer on a pending ride
+app.patch('/api/rides/:id/update-fare', authMiddleware, async (req, res) => {
+  try {
+    const { fare } = req.body;
+    if (!fare || fare < 1) return res.status(400).json({ error: 'Valid fare required' });
+
+    const ride = await Ride.findOneAndUpdate(
+      { _id: req.params.id, passenger: req.user.id, status: 'requested' },
+      { $set: { fare: Number(fare) } },
+      { new: true }
+    );
+    if (!ride) return res.status(404).json({ error: 'Ride not found or already accepted' });
+
+    // Re-broadcast updated fare to all online drivers
+    io.to('drivers-online').emit('ride:fare-updated', {
+      id:   ride._id,
+      fare: ride.fare
+    });
+
     res.json(ride);
   } catch (err) {
     res.status(500).json({ error: err.message });

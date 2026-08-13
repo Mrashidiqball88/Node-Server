@@ -115,17 +115,64 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .map-hint.dropoff-mode{border-color:#cc6622;color:#ff9966}
 
 /* ── Active Ride Panel ── */
-#active-ride{display:none;position:fixed;bottom:0;left:0;right:0;z-index:50;background:#13131a;border-top:2px solid #f5c518;padding:1rem}
-.ride-status-badge{display:inline-flex;align-items:center;gap:.4rem;background:#1a2a0a;border:1px solid #4caf50;border-radius:100px;padding:.25rem .75rem;font-size:.75rem;color:#4caf50;margin-bottom:.75rem}
+#active-ride{display:none;position:fixed;bottom:0;left:0;right:0;z-index:50;background:#13131a;border-top:2px solid #f5c518;padding:.85rem 1rem;max-height:80vh;overflow-y:auto}
+.ride-status-badge{display:inline-flex;align-items:center;gap:.4rem;background:#1a2a0a;border:1px solid #4caf50;border-radius:100px;padding:.22rem .65rem;font-size:.73rem;color:#4caf50;margin-bottom:.5rem}
 .ride-status-dot{width:6px;height:6px;background:#4caf50;border-radius:50%;animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.ride-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem}
-.ride-info-card{background:#0a0a0f;border-radius:10px;padding:.6rem .8rem}
-.ride-info-label{color:#666;font-size:.7rem;margin-bottom:.2rem}
-.ride-info-val{font-size:.9rem;font-weight:600}
-.ride-actions{display:flex;gap:.5rem}
+.ride-actions{display:flex;gap:.5rem;margin-top:.55rem}
 .btn-danger{flex:1;background:#2a0a0a;border:1px solid #cc3333;color:#ff6666;border-radius:10px;padding:.6rem;font-size:.85rem;cursor:pointer}
 .btn-secondary{flex:1;background:#0a0a1a;border:1px solid #333;color:#aaa;border-radius:10px;padding:.6rem;font-size:.85rem;cursor:pointer}
+
+/* ── Live fare update strip (waiting state) ── */
+.ar-fare-strip{display:flex;align-items:center;justify-content:space-between;background:#0a0a0f;border-radius:10px;padding:.5rem .75rem;margin:.35rem 0}
+.ar-fare-info{display:flex;flex-direction:column}
+.ar-fare-label{font-size:.65rem;color:#666;text-transform:uppercase;letter-spacing:.04em}
+.ar-fare-big{font-size:1.1rem;font-weight:800;color:#f5c518}
+.ar-btns{display:flex;gap:.28rem}
+.ar-adj{background:#1a1a0a;border:1px solid #2a2a10;color:#ccc;border-radius:7px;padding:.28rem .52rem;font-size:.72rem;cursor:pointer;white-space:nowrap;transition:all .15s}
+.ar-adj:hover{border-color:#f5c518;color:#f5c518}
+.ar-adj.broadcast{background:#1a2a0a;border-color:#2d5a2d;color:#4caf50}
+.ar-adj.broadcast:hover{border-color:#4caf50}
+
+/* ── Offers list ── */
+.offers-hdr{display:flex;justify-content:space-between;align-items:center;margin:.4rem 0 .3rem}
+.offers-hdr-label{font-size:.75rem;color:#888;font-weight:600}
+.offers-hdr-count{font-size:.72rem;color:#555}
+.offers-list{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:.38rem;margin-bottom:.4rem}
+.no-offers-msg{text-align:center;color:#444;font-size:.8rem;padding:.85rem}
+.offer-card{background:#0d0d1a;border:1px solid #1e1e2e;border-radius:11px;padding:.6rem .75rem;transition:border-color .18s}
+.offer-card-top{display:flex;align-items:center;gap:.55rem}
+.offer-avatar{width:32px;height:32px;background:#1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;color:#fff}
+.offer-body{flex:1;min-width:0}
+.offer-name{font-size:.85rem;font-weight:600;color:#ddd}
+.offer-vehicle{font-size:.68rem;color:#555;margin-top:.08rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.offer-plate{display:inline-block;background:#0a0a15;border:1px solid #2a2a3a;border-radius:4px;padding:.02rem .32rem;font-size:.64rem;font-family:monospace;color:#888;letter-spacing:.06em;margin-left:.3rem}
+.offer-price-col{text-align:right;flex-shrink:0}
+.offer-price-amt{font-size:1rem;font-weight:800;color:#f5c518;display:block}
+.offer-type-badge{font-size:.58rem;padding:.07rem .32rem;border-radius:4px;font-weight:700}
+.offer-type-badge.accept{background:#1a3a1a;color:#4caf50}
+.offer-type-badge.counter{background:#1a1a3a;color:#66aaff}
+.btn-accept-driver{width:100%;margin-top:.4rem;background:#1e3a5f;border:1px solid #336699;color:#fff;border-radius:8px;padding:.38rem;font-size:.78rem;font-weight:700;cursor:pointer;transition:background .2s}
+.btn-accept-driver:hover{background:#254f80}
+
+/* ── Matched driver card ── */
+.matched-card{background:#0d1117;border:1px solid #1e3a5f;border-radius:13px;padding:.8rem;margin:.4rem 0}
+.matched-top{display:flex;align-items:center;gap:.65rem;margin-bottom:.55rem}
+.matched-avatar{width:40px;height:40px;background:#1e3a5f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;flex-shrink:0}
+.matched-info{flex:1;min-width:0}
+.matched-name{font-size:.95rem;font-weight:700}
+.matched-vehicle-row{font-size:.75rem;color:#888;margin-top:.1rem}
+.matched-plate{display:inline-block;background:#0a0a15;border:1px solid #2a2a3a;border-radius:4px;padding:.02rem .35rem;font-size:.68rem;font-family:monospace;color:#aaa;letter-spacing:.07em;margin-left:.35rem}
+.matched-rating{font-size:.82rem;color:#f5c518;font-weight:600;white-space:nowrap}
+.matched-fare-row{display:flex;justify-content:space-between;font-size:.8rem;color:#666;padding:.3rem 0;border-top:1px solid #1a1a2a}
+.matched-fare-val{font-size:1rem;font-weight:800;color:#f5c518}
+.matched-pay-row{font-size:.75rem;color:#666;padding:.2rem 0}
+.contact-btns{display:flex;gap:.45rem;margin:.5rem 0}
+.btn-call,.btn-msg{flex:1;border-radius:10px;padding:.6rem;font-size:.82rem;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:.3rem}
+.btn-call{background:#1a3a1a;border:1px solid #2d5a2d;color:#4caf50}
+.btn-call:hover{background:#1e4a1e}
+.btn-msg{background:#1a1a3a;border:1px solid #2d2d5a;color:#66aaff}
+.btn-msg:hover{background:#1e1e4a}
 
 /* ── empty-msg shared ── */
 .empty-msg{text-align:center;color:#444;padding:2rem;font-size:.9rem}
@@ -347,18 +394,73 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
   </div>
 </div>
 
-<!-- Active Ride Panel -->
+<!-- Active Ride Panel (multi-state) -->
 <div id="active-ride">
-  <div class="ride-status-badge"><span class="ride-status-dot"></span><span id="ride-status-text">Finding driver…</span></div>
-  <div class="ride-info-grid">
-    <div class="ride-info-card"><div class="ride-info-label">Driver</div><div class="ride-info-val" id="ar-driver">—</div></div>
-    <div class="ride-info-card"><div class="ride-info-label">Your Offer</div><div class="ride-info-val" id="ar-fare">—</div></div>
-    <div class="ride-info-card"><div class="ride-info-label">Vehicle</div><div class="ride-info-val" id="ar-vehicle">—</div></div>
-    <div class="ride-info-card"><div class="ride-info-label">Payment</div><div class="ride-info-val" id="ar-payment">—</div></div>
+
+  <!-- ── State: Waiting for driver offers ── -->
+  <div id="ar-waiting">
+    <div class="ride-status-badge"><span class="ride-status-dot"></span><span id="ride-status-text">Broadcasting your offer…</span></div>
+
+    <!-- Live fare update strip -->
+    <div class="ar-fare-strip">
+      <div class="ar-fare-info">
+        <span class="ar-fare-label">Your Offer</span>
+        <span class="ar-fare-big" id="ar-live-fare">Rs 0</span>
+      </div>
+      <div class="ar-btns">
+        <button class="ar-adj" onclick="liveAdjustFare(-20)">−20</button>
+        <button class="ar-adj" onclick="liveAdjustFare(+20)">+20</button>
+        <button class="ar-adj" onclick="liveAdjustFare(+50)">+50</button>
+        <button class="ar-adj broadcast" onclick="broadcastFareUpdate()">📢 Raise</button>
+      </div>
+    </div>
+
+    <!-- Driver offers list -->
+    <div class="offers-hdr">
+      <span class="offers-hdr-label">Driver Offers</span>
+      <span class="offers-hdr-count" id="offers-count"></span>
+    </div>
+    <div class="offers-list" id="offers-list">
+      <div class="no-offers-msg">🔍 Waiting for nearby drivers to respond…</div>
+    </div>
+
+    <div class="ride-actions">
+      <button class="btn-danger" onclick="cancelRide()">✗ Cancel</button>
+      <button class="btn-secondary" onclick="shareLocation()">📍 Share</button>
+    </div>
   </div>
-  <div class="ride-actions">
-    <button class="btn-danger" onclick="cancelRide()">Cancel Ride</button>
-    <button class="btn-secondary" onclick="shareLocation()">📍 Share Location</button>
+
+  <!-- ── State: Driver matched ── -->
+  <div id="ar-matched" style="display:none">
+    <div class="ride-status-badge" style="background:#1a2a0a;border-color:#4caf50"><span class="ride-status-dot"></span><span id="ar-status-text">Driver on the way!</span></div>
+
+    <div class="matched-card">
+      <div class="matched-top">
+        <div class="matched-avatar" id="ar-avatar">?</div>
+        <div class="matched-info">
+          <div class="matched-name" id="ar-driver-name">—</div>
+          <div class="matched-vehicle-row">
+            <span id="ar-driver-vehicle">—</span>
+            <span class="matched-plate" id="ar-driver-plate">—</span>
+          </div>
+        </div>
+        <div class="matched-rating" id="ar-driver-rating">⭐ 5.0</div>
+      </div>
+      <div class="matched-fare-row">
+        <span>Agreed Fare</span>
+        <span class="matched-fare-val" id="ar-fare">—</span>
+      </div>
+      <div class="matched-pay-row" id="ar-payment">—</div>
+    </div>
+
+    <div class="contact-btns" id="ar-contact-btns">
+      <!-- populated by JS after driver phone is known -->
+    </div>
+
+    <div class="ride-actions">
+      <button class="btn-danger" onclick="cancelRide()">✗ Cancel Ride</button>
+      <button class="btn-secondary" onclick="shareLocation()">📍 Share Location</button>
+    </div>
   </div>
 </div>
 
@@ -411,6 +513,9 @@ let digitalAccountNumber = '';
 let activeRide = null;
 let socket = null;
 let locationWatchId = null;
+let driverOffers = [];          // live list of driver offers/counters
+let activeLiveFare = 0;         // fare being shown in waiting panel
+let activeDriverInfo = null;    // driver object after customer selects one
 // Autocomplete debounce timers
 let locTimer = { pickup: null, dropoff: null };
 
@@ -766,26 +871,120 @@ async function bookRide() {
       ...(digitalAccountNumber ? { mobileAccount: digitalAccountNumber } : {})
     });
     activeRide = ride;
-    showActiveRide(ride);
+    activeLiveFare = offeredFare;
+    driverOffers = [];
+    showWaitingPanel(ride);
     connectToRideRoom(ride._id);
-    showToast('Ride requested! Drivers can see your offer…', 'success');
+    showToast('Offer broadcast! Waiting for drivers…', 'success');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-function showActiveRide(ride) {
+// ── Waiting Panel (post-booking, before driver selection) ──────────────────
+function showWaitingPanel(ride) {
   document.getElementById('active-ride').style.display = 'block';
   document.getElementById('bottom-panel').style.display = 'none';
-  document.getElementById('ride-status-text').textContent = statusLabel(ride.status);
-  document.getElementById('ar-fare').textContent = `Rs ${(ride.fare || 0).toLocaleString()}`;
-  document.getElementById('ar-vehicle').textContent = ride.vehicleType || '—';
-  document.getElementById('ar-driver').textContent = ride.driver?.name || 'Finding…';
-  const pm = ride.paymentMethod || 'cash';
+  document.getElementById('ar-waiting').style.display = 'block';
+  document.getElementById('ar-matched').style.display = 'none';
+  document.getElementById('ar-live-fare').textContent = `Rs ${(activeLiveFare || ride.fare || 0).toLocaleString()}`;
+  document.getElementById('ride-status-text').textContent = 'Broadcasting your offer…';
+  document.getElementById('offers-list').innerHTML = '<div class="no-offers-msg">🔍 Waiting for nearby drivers to respond…</div>';
+  document.getElementById('offers-count').textContent = '';
+}
+
+// ── Matched Panel (after customer selects a driver) ────────────────────────
+function showMatchedPanel(driver, agreedFare) {
+  document.getElementById('ar-waiting').style.display = 'none';
+  document.getElementById('ar-matched').style.display = 'block';
+  document.getElementById('ar-status-text').textContent = 'Driver on the way! 🚗';
+  document.getElementById('ar-avatar').textContent = (driver.name || '?')[0].toUpperCase();
+  document.getElementById('ar-driver-name').textContent = driver.name || '—';
+  document.getElementById('ar-driver-vehicle').textContent = [driver.vehicleType, driver.vehicleModel].filter(Boolean).join(' · ') || '—';
+  document.getElementById('ar-driver-plate').textContent = driver.vehiclePlate || '—';
+  document.getElementById('ar-driver-rating').textContent = `⭐ ${(driver.rating || 5.0).toFixed(1)}`;
+  document.getElementById('ar-fare').textContent = `Rs ${(agreedFare || 0).toLocaleString()}`;
+  const pm = activeRide?.paymentMethod || 'cash';
   const meta = PAY_META[pm] || PAY_META.cash;
   document.getElementById('ar-payment').textContent = `${meta.icon} ${meta.name}`;
+
+  // Call / Message buttons (using driver phone)
+  const phone = driver.phone ? driver.phone.replace(/\D/g, '').replace(/^0/, '+92') : '';
+  const contactHtml = phone
+    ? `<a class="btn-call" href="tel:${phone}">📞 Call Driver</a>
+       <a class="btn-msg"  href="sms:${phone}">💬 Message</a>`
+    : `<div style="font-size:.78rem;color:#555;text-align:center;flex:1">Contact details not available</div>`;
+  document.getElementById('ar-contact-btns').innerHTML = contactHtml;
+}
+
+// ── Render offers list ─────────────────────────────────────────────────────
+function renderOffers(offers) {
+  driverOffers = offers || [];
+  const el = document.getElementById('offers-list');
+  const count = document.getElementById('offers-count');
+  if (!driverOffers.length) {
+    el.innerHTML = '<div class="no-offers-msg">🔍 Waiting for nearby drivers to respond…</div>';
+    count.textContent = '';
+    return;
+  }
+  count.textContent = `${driverOffers.length} response${driverOffers.length > 1 ? 's' : ''}`;
+  el.innerHTML = driverOffers.map(o => {
+    const initial = (o.driverName || '?')[0].toUpperCase();
+    const vehicleStr = [o.vehicleModel, o.vehiclePlate].filter(Boolean).join(' · ');
+    const typeBadge = o.type === 'counter'
+      ? '<span class="offer-type-badge counter">Counter</span>'
+      : '<span class="offer-type-badge accept">Accepts offer</span>';
+    return `<div class="offer-card">
+      <div class="offer-card-top">
+        <div class="offer-avatar">${initial}</div>
+        <div class="offer-body">
+          <div class="offer-name">${o.driverName || 'Driver'}${typeBadge}</div>
+          <div class="offer-vehicle">⭐ ${(o.rating||5).toFixed(1)} ${vehicleStr ? '· ' + vehicleStr : ''}</div>
+        </div>
+        <div class="offer-price-col">
+          <span class="offer-price-amt">Rs ${(o.price||0).toLocaleString()}</span>
+        </div>
+      </div>
+      <button class="btn-accept-driver" onclick="acceptDriver('${o.driverId}',${o.price})">✓ Accept — Rs ${(o.price||0).toLocaleString()}</button>
+    </div>`;
+  }).join('');
+}
+
+// ── Accept specific driver ─────────────────────────────────────────────────
+async function acceptDriver(driverId, agreedFare) {
+  if (!activeRide) return;
+  try {
+    const ride = await apiCall(`/api/rides/${activeRide._id}/accept-driver`, 'PATCH', { driverId });
+    activeRide = ride;
+    // The full driver info arrives via ride:accepted socket event
+    // But we can pre-populate from offers list while socket event comes in
+    const offer = driverOffers.find(o => o.driverId === driverId);
+    if (offer) {
+      showMatchedPanel({
+        name: offer.driverName, vehicleModel: offer.vehicleModel,
+        vehiclePlate: offer.vehiclePlate, rating: offer.rating
+      }, agreedFare);
+    }
+    showToast('Driver accepted! They\'re on the way.', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ── Live fare adjustment (during waiting) ─────────────────────────────────
+function liveAdjustFare(delta) {
+  const min = MIN_FARES[selectedVehicle] || 50;
+  activeLiveFare = Math.max(min, activeLiveFare + delta);
+  document.getElementById('ar-live-fare').textContent = `Rs ${activeLiveFare.toLocaleString()}`;
+}
+
+async function broadcastFareUpdate() {
+  if (!activeRide) return;
+  try {
+    await apiCall(`/api/rides/${activeRide._id}/update-fare`, 'PATCH', { fare: activeLiveFare });
+    activeRide.fare = activeLiveFare;
+    showToast(`Offer updated to Rs ${activeLiveFare.toLocaleString()} — drivers notified!`, 'success');
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 function statusLabel(s) {
-  return { requested: 'Finding driver…', accepted: 'Driver on the way!', arrived: 'Driver arrived!', 'in-progress': 'On the ride!', completed: 'Ride complete!', cancelled: 'Ride cancelled' }[s] || s;
+  return { requested: 'Broadcasting offer…', accepted: 'Driver on the way!', arrived: 'Driver arrived!', 'in-progress': 'On the ride!', completed: 'Ride complete!', cancelled: 'Ride cancelled' }[s] || s;
 }
 
 async function cancelRide() {
@@ -798,8 +997,11 @@ async function cancelRide() {
 
 function endRide() {
   activeRide = null; routeDistanceKm = null; offeredFare = 0;
+  activeLiveFare = 0; driverOffers = []; activeDriverInfo = null;
   digitalAccountNumber = ''; selectedPaymentMethod = 'cash';
   document.getElementById('active-ride').style.display = 'none';
+  document.getElementById('ar-waiting').style.display = 'block';
+  document.getElementById('ar-matched').style.display = 'none';
   document.getElementById('bottom-panel').style.display = 'block';
   if (pickupMarker)  { pickupMarker.remove();  pickupMarker  = null; }
   if (dropoffMarker) { dropoffMarker.remove(); dropoffMarker = null; }
@@ -832,17 +1034,34 @@ function connectSocket() {
 function connectToRideRoom(rideId) {
   if (!socket) return;
   socket.emit('ride:join', rideId);
-  socket.on('ride:accepted', ({ driver }) => {
-    document.getElementById('ar-driver').textContent = driver.name;
-    document.getElementById('ride-status-text').textContent = 'Driver on the way!';
-    showToast(`${driver.name} accepted your offer!`, 'success');
+
+  // Driver offers / counter-offers arriving in real time
+  socket.on('ride:offers', (offers) => {
+    renderOffers(offers);
+    if (offers.length === 1) showToast(`A driver responded to your offer!`, 'info');
+    else if (offers.length > 1) showToast(`${offers.length} drivers have responded!`, 'info');
   });
+
+  // Customer selected a driver — full driver profile arrives here
+  socket.on('ride:accepted', ({ driver, rideId: acceptedRideId }) => {
+    if (activeRide && String(activeRide._id) === String(acceptedRideId)) {
+      activeDriverInfo = driver;
+      showMatchedPanel(driver, activeRide.fare);
+      showToast(`${driver.name} is on the way!`, 'success');
+    }
+  });
+
   socket.on('ride:status', ({ status }) => {
-    document.getElementById('ride-status-text').textContent = statusLabel(status);
     if (status === 'completed') { showToast('Ride completed! 🎉', 'success'); setTimeout(endRide, 2000); }
     else if (status === 'cancelled') { showToast('Ride was cancelled', 'error'); setTimeout(endRide, 1500); }
-    else if (status === 'arrived') { showToast('Your driver has arrived!', 'info'); }
+    else if (status === 'arrived') {
+      document.getElementById('ar-status-text').textContent = 'Driver has arrived! 📍';
+      showToast('Your driver has arrived!', 'info');
+    } else if (status === 'in-progress') {
+      document.getElementById('ar-status-text').textContent = 'Ride in progress 🚗';
+    }
   });
+
   socket.on('driver:location', ({ lat, lng }) => {
     if (driverMarker) driverMarker.remove();
     driverMarker = L.marker([lat, lng], {

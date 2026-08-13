@@ -71,10 +71,19 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .rr-meta-item{flex:1;background:#0a0a0f;border-radius:10px;padding:.6rem;text-align:center}
 .rr-meta-label{font-size:.7rem;color:#666;margin-bottom:.2rem}
 .rr-meta-val{font-size:1rem;font-weight:700;color:#f5c518}
-.rr-actions{display:flex;gap:.75rem}
-.btn-reject{flex:1;background:#2a0a0a;border:1px solid #cc3333;color:#ff6666;border-radius:12px;padding:.75rem;font-size:.95rem;font-weight:600;cursor:pointer}
-.btn-accept{flex:1;background:#1e3a5f;border:1px solid #4488cc;color:#fff;border-radius:12px;padding:.75rem;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s}
+.rr-counter-wrap{background:#0a0a0f;border:1px solid #1e1e2e;border-radius:10px;padding:.55rem .75rem;margin-bottom:.65rem}
+.rr-counter-label{font-size:.7rem;color:#666;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.35rem;font-weight:600}
+.rr-counter-row{display:flex;align-items:center;gap:.45rem}
+.rr-counter-input{flex:1;background:#13131a;border:1px solid #333;border-radius:8px;padding:.5rem .75rem;color:#fff;font-size:.9rem;outline:none;transition:border-color .2s}
+.rr-counter-input:focus{border-color:#66aaff}
+.rr-counter-input::placeholder{color:#333}
+.rr-actions{display:flex;gap:.5rem}
+.btn-reject{flex:1;background:#2a0a0a;border:1px solid #cc3333;color:#ff6666;border-radius:12px;padding:.7rem;font-size:.88rem;font-weight:600;cursor:pointer}
+.btn-counter{flex:1;background:#0d1a2a;border:1px solid #336699;color:#66aaff;border-radius:12px;padding:.7rem;font-size:.88rem;font-weight:700;cursor:pointer;transition:background .2s}
+.btn-counter:hover{background:#152a3a}
+.btn-accept{flex:1;background:#1e3a5f;border:1px solid #4488cc;color:#fff;border-radius:12px;padding:.7rem;font-size:.88rem;font-weight:700;cursor:pointer;transition:background .2s}
 .btn-accept:hover{background:#2a4f7f}
+.rr-offer-sent{display:none;background:#0d1a0d;border:1px solid #2d5a2d;border-radius:12px;padding:.75rem;text-align:center;color:#4caf50;font-size:.88rem;font-weight:600;margin-bottom:.5rem}
 
 /* ── Active Ride Panel ── */
 #active-panel{display:none;background:#0d1117;border-top:1px solid #1e3a5f;padding:1rem;flex-shrink:0}
@@ -189,6 +198,8 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
           <option value="Car AC">🚗 Car AC (with AC)</option>
         </select>
       </div>
+      <div class="form-group"><label>Vehicle Model</label><input type="text" id="r-vehicle-model" placeholder="e.g. Suzuki Cultus 2020"></div>
+      <div class="form-group"><label>Number Plate</label><input type="text" id="r-plate" placeholder="e.g. LHR-1234" style="text-transform:uppercase"></div>
       <div class="form-group"><label>Password</label><input type="password" id="r-pass" placeholder="••••••••"></div>
       <button class="btn-primary" onclick="doRegister()">Create Driver Account</button>
     </div>
@@ -307,11 +318,25 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
     <div class="rr-meta-item"><div class="rr-meta-label">Distance</div><div class="rr-meta-val" id="rr-dist">—</div></div>
     <div class="rr-meta-item"><div class="rr-meta-label">Vehicle</div><div class="rr-meta-val" id="rr-vehicle">—</div></div>
   </div>
-  <div id="rr-payment-row" style="display:none;background:#0a0a0f;border-radius:8px;padding:.4rem .75rem;margin-bottom:.5rem;font-size:.8rem;color:#888;display:flex;align-items:center;gap:.4rem">
+  <div id="rr-payment-row" style="background:#0a0a0f;border-radius:8px;padding:.4rem .75rem;margin-bottom:.6rem;font-size:.8rem;color:#888;display:flex;align-items:center;gap:.4rem">
     <span id="rr-pay-icon">💵</span><span id="rr-pay-label">Cash payment</span>
   </div>
-  <div class="rr-actions">
+
+  <!-- Counter-offer input -->
+  <div class="rr-counter-wrap">
+    <div class="rr-counter-label">Counter Offer (optional — leave blank to accept as-is)</div>
+    <div class="rr-counter-row">
+      <span style="color:#666;font-size:.85rem;font-weight:600">Rs</span>
+      <input type="number" id="rr-counter-input" class="rr-counter-input" placeholder="Your price…" min="1">
+    </div>
+  </div>
+
+  <!-- Offer sent confirmation (shown after sending) -->
+  <div class="rr-offer-sent" id="rr-offer-sent">✓ Offer sent — waiting for customer to choose…</div>
+
+  <div class="rr-actions" id="rr-actions">
     <button class="btn-reject" onclick="rejectRide()">✗ Reject</button>
+    <button class="btn-counter" onclick="sendCounter()">⇄ Counter</button>
     <button class="btn-accept" onclick="acceptRide()">✓ Accept</button>
   </div>
 </div>
@@ -326,6 +351,7 @@ let socket = null;
 let map, pickupMarker, dropoffMarker, routeLine, myMarker;
 let isOnline      = false;
 let pendingRide   = null;   // current popup ride
+let sentOffer     = null;   // { rideId } after driver sends an offer, before customer chooses
 let activeRide    = null;   // accepted ride
 let requestTimer  = null;
 let locationWatch = null;
@@ -367,13 +393,19 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const name    = document.getElementById('r-name').value.trim();
-  const email   = document.getElementById('r-email').value.trim();
-  const phone   = document.getElementById('r-phone').value.trim();
-  const vehicle = document.getElementById('r-vehicle').value;
-  const pass    = document.getElementById('r-pass').value;
+  const name         = document.getElementById('r-name').value.trim();
+  const email        = document.getElementById('r-email').value.trim();
+  const phone        = document.getElementById('r-phone').value.trim();
+  const vehicle      = document.getElementById('r-vehicle').value;
+  const vehicleModel = document.getElementById('r-vehicle-model').value.trim();
+  const vehiclePlate = document.getElementById('r-plate').value.trim().toUpperCase();
+  const pass         = document.getElementById('r-pass').value;
   try {
-    const res = await apiCall('/api/auth/register', 'POST', { name, email, phone, password: pass, role: 'driver', vehicleType: vehicle });
+    const res = await apiCall('/api/auth/register', 'POST', {
+      name, email, phone, password: pass,
+      role: 'driver', vehicleType: vehicle,
+      vehicleModel, vehiclePlate
+    });
     saveSession(res);
   } catch (e) { document.getElementById('auth-error').textContent = e.message; }
 }
@@ -471,15 +503,54 @@ function connectSocket() {
 
   // New ride request from passenger
   socket.on('ride:new', (ride) => {
-    if (!isOnline || activeRide) return;
+    if (!isOnline || activeRide || sentOffer) return;
     pendingRide = ride;
     showRideRequest(ride);
   });
 
-  // Another driver took this ride
+  // Customer raised their offered fare on an existing ride
+  socket.on('ride:fare-updated', ({ id, fare }) => {
+    if (pendingRide && String(pendingRide.id) === String(id)) {
+      pendingRide.fare = fare;
+      document.getElementById('rr-fare').textContent = `Rs ${(fare || 0).toLocaleString()}`;
+      showToast(`Customer raised offer to Rs ${fare.toLocaleString()}!`, 'info');
+    }
+  });
+
+  // Customer selected a driver — check if it's us
+  socket.on('ride:accepted', ({ rideId, driver }) => {
+    if (sentOffer && String(sentOffer.rideId) === String(rideId)) {
+      if (String(driver.id) === String(user.id)) {
+        // We were selected!
+        sentOffer = null;
+        apiCall(`/api/rides/${rideId}`)
+          .then(ride => {
+            activeRide = ride;
+            showActivePanel(ride);
+            showRideOnMap(ride);
+            socket.emit('ride:join', rideId);
+            showToast('Customer accepted your offer! Head to pickup.', 'success');
+          })
+          .catch(() => showToast('Ride accepted — loading details…', 'success'));
+      } else {
+        // Another driver was selected
+        sentOffer = null;
+        clearRideMap();
+        showToast('Customer chose another driver', 'info');
+      }
+    }
+  });
+
+  // Another driver took this ride (or customer cancelled)
   socket.on('ride:taken', ({ rideId }) => {
-    if (pendingRide && pendingRide.id === String(rideId)) {
+    const matchesPending = pendingRide && String(pendingRide.id) === String(rideId);
+    const matchesSent    = sentOffer   && String(sentOffer.rideId) === String(rideId);
+    if (matchesPending) {
       hideRideRequest();
+      showToast('Ride was taken by another driver', 'info');
+    } else if (matchesSent) {
+      sentOffer = null;
+      clearRideMap();
       showToast('Ride was taken by another driver', 'info');
     }
   });
@@ -508,10 +579,13 @@ function showRideRequest(ride) {
 
   // Payment method badge
   const pm = ride.paymentMethod || 'cash';
-  const pmRow = document.getElementById('rr-payment-row');
   document.getElementById('rr-pay-icon').textContent  = PAY_ICONS[pm] || '💵';
   document.getElementById('rr-pay-label').textContent = PAY_NAMES[pm] || 'Cash on delivery';
-  pmRow.style.display = 'flex';
+
+  // Reset counter input and offer-sent state
+  document.getElementById('rr-counter-input').value = '';
+  document.getElementById('rr-offer-sent').style.display = 'none';
+  document.getElementById('rr-actions').style.display = 'flex';
 
   document.getElementById('ride-request').style.display = 'block';
 
@@ -532,6 +606,9 @@ function hideRideRequest() {
   document.getElementById('ride-request').style.display = 'none';
   clearInterval(requestTimer);
   pendingRide = null;
+  document.getElementById('rr-counter-input').value = '';
+  document.getElementById('rr-offer-sent').style.display = 'none';
+  document.getElementById('rr-actions').style.display = 'flex';
 }
 
 function rejectRide() {
@@ -540,19 +617,47 @@ function rejectRide() {
   showToast('Ride rejected', 'info');
 }
 
+// Accept at the customer's offered fare (no counter)
 async function acceptRide() {
   if (!pendingRide) return;
-  const rideId = pendingRide.id;
-  hideRideRequest();
+  const rideId  = pendingRide.id;
+  const offeredPrice = pendingRide.fare;
   try {
-    const ride = await apiCall(`/api/rides/${rideId}/accept`, 'PATCH');
-    activeRide = ride;
-    socket.emit('ride:join', ride._id);
-    showActivePanel(ride);
-    showRideOnMap(ride);
-    showToast('Ride accepted! Head to pickup.', 'success');
+    await apiCall(`/api/rides/${rideId}/counter`, 'PATCH', { price: offeredPrice, type: 'accept' });
+    // Join ride room so we receive ride:accepted when customer picks us
+    socket.emit('ride:join', rideId);
+    sentOffer = { rideId };
+    pendingRide = null;
+    clearInterval(requestTimer);
+    // Show offer-sent state in popup (keep map showing)
+    document.getElementById('rr-actions').style.display = 'none';
+    document.getElementById('rr-offer-sent').style.display = 'block';
+    document.getElementById('rr-timer').textContent = '⏳';
+    showToast('Offer sent! Waiting for customer…', 'success');
   } catch (e) {
-    clearRideMap();
+    showToast(e.message, 'error');
+  }
+}
+
+// Send a counter-offer at a different price
+async function sendCounter() {
+  if (!pendingRide) return;
+  const counterInput = document.getElementById('rr-counter-input');
+  const price = parseFloat(counterInput.value);
+  if (!price || price < 1) return showToast('Enter a counter price', 'error');
+  const rideId = pendingRide.id;
+  try {
+    await apiCall(`/api/rides/${rideId}/counter`, 'PATCH', { price, type: 'counter' });
+    socket.emit('ride:join', rideId);
+    sentOffer = { rideId };
+    pendingRide = null;
+    clearInterval(requestTimer);
+    document.getElementById('rr-actions').style.display = 'none';
+    document.getElementById('rr-offer-sent').style.display = 'block';
+    document.getElementById('rr-offer-sent').textContent = `⇄ Counter Rs ${price.toLocaleString()} sent — waiting…`;
+    document.getElementById('rr-timer').textContent = '⏳';
+    showToast(`Counter offer Rs ${price.toLocaleString()} sent!`, 'success');
+  } catch (e) {
     showToast(e.message, 'error');
   }
 }
