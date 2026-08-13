@@ -99,16 +99,6 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .fare-quick.neg:hover{border-color:#cc4433;color:#ff6655;background:#1a0a0a}
 .fare-min-note{font-size:.63rem;color:#444;text-align:center;margin-top:.35rem}
 
-/* ── Payment Method ── */
-.section-label{font-size:.72rem;color:#555;margin:.7rem 0 .4rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
-.payment-methods{display:flex;gap:.5rem;margin-bottom:.75rem}
-.pay-btn{flex:1;background:#0a0a0f;border:1px solid #333;border-radius:10px;padding:.55rem .4rem;cursor:pointer;text-align:center;transition:all .2s;color:#fff;display:flex;flex-direction:column;align-items:center;gap:.25rem}
-.pay-btn .pay-icon{font-size:1.2rem}
-.pay-btn .pay-name{font-size:.68rem;font-weight:600}
-.pay-btn .pay-sub{font-size:.6rem;color:#555}
-.pay-btn.active{border-color:#f5c518;background:#1a1a0a;color:#f5c518}
-.pay-btn.active .pay-sub{color:#a0a060}
-.pay-btn:hover:not(.active){border-color:#444}
 
 .map-hint{background:#1a1a2a;border:1px dashed #333;border-radius:10px;padding:.6rem 1rem;text-align:center;color:#666;font-size:.8rem;margin-bottom:.75rem}
 .map-hint.pickup-mode{border-color:#2266cc;color:#6699ff}
@@ -330,7 +320,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
           <div class="fare-neg-left">
             <div class="fare-label-row">
               <span class="fare-label">Your Offer</span>
-              <span class="fare-badge">inDrive</span>
+              <span class="fare-badge">MyRide</span>
             </div>
             <div class="fare-meta" id="fare-meta"></div>
             <div style="margin-top:.25rem"><span class="dist-badge" id="dist-badge" style="display:none">📍 <span id="dist-km-val">0</span> km</span></div>
@@ -357,33 +347,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
         <div class="fare-min-note" id="fare-min-note"></div>
       </div>
 
-      <!-- Payment Method -->
-      <div id="payment-section" style="display:none">
-        <div class="section-label">Pay With</div>
-        <div class="payment-methods">
-          <button class="pay-btn active" data-method="cash" onclick="selectPayment(this)">
-            <span class="pay-icon">💵</span><span class="pay-name">Cash</span><span class="pay-sub">On delivery</span>
-          </button>
-          <button class="pay-btn" data-method="easypaisa" onclick="selectPayment(this)">
-            <span class="pay-icon">📱</span><span class="pay-name">EasyPaisa</span><span class="pay-sub">Mobile wallet</span>
-          </button>
-          <button class="pay-btn" data-method="jazzcash" onclick="selectPayment(this)">
-            <span class="pay-icon">🎵</span><span class="pay-name">JazzCash</span><span class="pay-sub">Mobile wallet</span>
-          </button>
-        </div>
-        <div id="digital-account-info" style="display:none">
-          <div style="background:#1a1a0a;border:1px solid #333;border-radius:10px;padding:.6rem .85rem;display:flex;align-items:center;gap:.6rem">
-            <span id="digital-pay-icon" style="font-size:1.3rem">📱</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.75rem;color:#888" id="digital-pay-label">Account</div>
-              <div style="font-size:.9rem;font-weight:600;color:#f5c518" id="digital-pay-number">—</div>
-            </div>
-            <button onclick="openPaymentModal(selectedPaymentMethod)" style="background:none;border:1px solid #444;color:#888;border-radius:7px;padding:.2rem .55rem;font-size:.75rem;cursor:pointer">Change</button>
-          </div>
-        </div>
-      </div>
-
-      <button class="btn-primary" id="book-btn" onclick="bookRide()" style="display:none">Book Ride 🚗</button>
+      <button class="btn-primary" id="book-btn" onclick="bookRide()" style="display:none;margin-top:.75rem">Book Ride 🚗</button>
     </div>
 
     <!-- RIDES TAB -->
@@ -466,24 +430,6 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
 <div class="toast" id="toast"></div>
 
-<!-- Payment Modal -->
-<div class="modal-overlay" id="payment-modal">
-  <div class="modal-card">
-    <div class="modal-brand">
-      <div class="modal-brand-icon" id="pm-icon">📱</div>
-      <div><div class="modal-brand-name" id="pm-name">EasyPaisa</div><div class="modal-brand-sub" id="pm-sub">Enter your mobile wallet number</div></div>
-    </div>
-    <div class="modal-field">
-      <label id="pm-label">Mobile Number</label>
-      <input type="tel" id="pm-number" placeholder="03XX-XXXXXXX" maxlength="13" oninput="formatPhone(this)" inputmode="numeric">
-      <div class="modal-note">Amount deducted from your <span id="pm-name2">EasyPaisa</span> account after confirmation.</div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-modal-cancel" onclick="closePaymentModal()">Cancel</button>
-      <button class="btn-modal-confirm" id="pm-confirm-btn" onclick="confirmPaymentModal()">Confirm</button>
-    </div>
-  </div>
-</div>
 
 
 <script>
@@ -492,12 +438,6 @@ const API = '';
 const FARE_RATES = { 'Bike': 30, 'Rickshaw': 40, 'Car Mini': 50, 'Car AC': 70 };
 const MIN_FARES  = { 'Bike': 50, 'Rickshaw': 70, 'Car Mini': 100, 'Car AC': 150 };
 const TILE_URL   = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const PAY_META   = {
-  cash:      { icon: '💵', name: 'Cash',      color: '#4caf50', btnColor: '#4caf50', btnText: '#000' },
-  easypaisa: { icon: '📱', name: 'EasyPaisa', color: '#00a651', btnColor: '#00a651', btnText: '#fff' },
-  jazzcash:  { icon: '🎵', name: 'JazzCash',  color: '#d7211d', btnColor: '#d7211d', btnText: '#fff' },
-  bank:      { icon: '🏦', name: 'Bank Transfer', color: '#3399ff', btnColor: '#3399ff', btnText: '#fff' }
-};
 
 // ── State ─────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('rh_token');
@@ -508,8 +448,6 @@ let mapMode = 'pickup';
 let selectedVehicle = 'Bike';
 let routeDistanceKm = null;
 let offeredFare = 0;                   // customer's negotiated fare
-let selectedPaymentMethod = 'cash';
-let digitalAccountNumber = '';
 let activeRide = null;
 let socket = null;
 let locationWatchId = null;
@@ -667,8 +605,15 @@ function renderDropdown(type, results) {
   dd.className = 'location-dropdown open';
 }
 
+// Guard against touchstart→mousedown double-fire on mobile
+let _pickingGuard = false;
+
 function pickFromSearch(e, type, lat, lng, display) {
-  e.preventDefault(); // prevent blur (desktop) or scroll (mobile) from firing first
+  if (_pickingGuard) return;          // already handled by the earlier event
+  _pickingGuard = true;
+  setTimeout(() => { _pickingGuard = false; }, 600);
+
+  e.preventDefault();                 // keep focus in input (desktop blur guard)
   e.stopPropagation();
   closeDropdown(type);
   if (type === 'pickup')  setPickup(+lat, +lng, display);
@@ -698,8 +643,8 @@ function onLocFocus(type) {
 }
 
 function onLocBlur(type) {
-  // Short delay so mousedown on dropdown item fires first
-  setTimeout(() => closeDropdown(type), 220);
+  // Delay long enough for mousedown/touchstart on a dropdown item to fire first
+  setTimeout(() => closeDropdown(type), 350);
 }
 
 // ── Set Locations ─────────────────────────────────────────────────────────
@@ -725,7 +670,6 @@ async function setPickup(lat, lng, preDisplay = null) {
     const distKm = await drawRoute();
     routeDistanceKm = distKm;
     updateFare();
-    showPaymentSection();
   } else {
     // Only pickup set — pan to show the new marker
     map.setView([lat, lng], 14);
@@ -751,7 +695,6 @@ async function setDropoff(lat, lng, preDisplay = null) {
     const distKm = await drawRoute();
     routeDistanceKm = distKm;
     updateFare();
-    showPaymentSection();
   } else {
     // Only dropoff set — pan to show the new marker
     map.setView([lat, lng], 14);
@@ -828,65 +771,9 @@ function selectVehicle(btn) {
   if (pickup && dropoff) updateFare();
 }
 
-// ── Payment Method ─────────────────────────────────────────────────────────
-function showPaymentSection() {
-  document.getElementById('payment-section').style.display = 'block';
-}
-
-function selectPayment(btn) {
-  document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  selectedPaymentMethod = btn.dataset.method;
-  if (selectedPaymentMethod === 'cash') {
-    digitalAccountNumber = '';
-    document.getElementById('digital-account-info').style.display = 'none';
-  } else {
-    openPaymentModal(selectedPaymentMethod);
-  }
-}
-
-function openPaymentModal(method) {
-  const meta = PAY_META[method];
-  document.getElementById('pm-icon').textContent = meta.icon;
-  document.getElementById('pm-name').textContent = meta.name;
-  document.getElementById('pm-name2').textContent = meta.name;
-  document.getElementById('pm-sub').textContent = `Enter your ${meta.name} mobile number`;
-  document.getElementById('pm-label').textContent = `${meta.name} Mobile Number`;
-  document.getElementById('pm-confirm-btn').style.background = meta.btnColor;
-  document.getElementById('pm-confirm-btn').style.color = meta.btnText;
-  document.getElementById('pm-number').value = digitalAccountNumber || '';
-  document.getElementById('payment-modal').classList.add('open');
-  setTimeout(() => document.getElementById('pm-number').focus(), 250);
-}
-
-function closePaymentModal() {
-  document.getElementById('payment-modal').classList.remove('open');
-  if (!digitalAccountNumber) {
-    selectedPaymentMethod = 'cash';
-    document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.dataset.method === 'cash'));
-    document.getElementById('digital-account-info').style.display = 'none';
-  }
-}
-
-function confirmPaymentModal() {
-  const num = document.getElementById('pm-number').value.replace(/\D/g, '');
-  if (num.length < 10) return showToast('Enter a valid 10–11 digit number', 'error');
-  digitalAccountNumber = document.getElementById('pm-number').value;
-  document.getElementById('payment-modal').classList.remove('open');
-  const meta = PAY_META[selectedPaymentMethod];
-  document.getElementById('digital-pay-icon').textContent = meta.icon;
-  document.getElementById('digital-pay-label').textContent = meta.name + ' Account';
-  document.getElementById('digital-pay-number').textContent = digitalAccountNumber;
-  document.getElementById('digital-account-info').style.display = 'block';
-  showToast(`${meta.name} account linked`, 'success');
-}
-
 // ── Book Ride ─────────────────────────────────────────────────────────────
 async function bookRide() {
   if (!pickup || !dropoff) return showToast('Set pickup & dropoff first', 'error');
-  if ((selectedPaymentMethod === 'easypaisa' || selectedPaymentMethod === 'jazzcash') && !digitalAccountNumber) {
-    return showToast('Enter your mobile account number first', 'error');
-  }
   if (!offeredFare || offeredFare < 1) return showToast('Invalid fare amount', 'error');
 
   const dist = routeDistanceKm !== null
@@ -897,12 +784,11 @@ async function bookRide() {
     const ride = await apiCall('/api/rides', 'POST', {
       pickupLocation:  { ...pickup },
       dropoffLocation: { ...dropoff },
-      fare:            offeredFare,       // customer's negotiated offer
+      fare:            offeredFare,
       offeredFare:     offeredFare,
       distance:        +dist.toFixed(2),
       vehicleType:     selectedVehicle,
-      paymentMethod:   selectedPaymentMethod,
-      ...(digitalAccountNumber ? { mobileAccount: digitalAccountNumber } : {})
+      paymentMethod:   'cash'
     });
     activeRide = ride;
     activeLiveFare = offeredFare;
@@ -936,9 +822,7 @@ function showMatchedPanel(driver, agreedFare) {
   document.getElementById('ar-driver-plate').textContent = driver.vehiclePlate || '—';
   document.getElementById('ar-driver-rating').textContent = `⭐ ${(driver.rating || 5.0).toFixed(1)}`;
   document.getElementById('ar-fare').textContent = `Rs ${(agreedFare || 0).toLocaleString()}`;
-  const pm = activeRide?.paymentMethod || 'cash';
-  const meta = PAY_META[pm] || PAY_META.cash;
-  document.getElementById('ar-payment').textContent = `${meta.icon} ${meta.name}`;
+  document.getElementById('ar-payment').textContent = '💵 Cash (direct)';
 
   // Call / Message buttons (using driver phone)
   const phone = driver.phone ? driver.phone.replace(/\D/g, '').replace(/^0/, '+92') : '';
@@ -1032,7 +916,6 @@ async function cancelRide() {
 function endRide() {
   activeRide = null; routeDistanceKm = null; offeredFare = 0;
   activeLiveFare = 0; driverOffers = []; activeDriverInfo = null;
-  digitalAccountNumber = ''; selectedPaymentMethod = 'cash';
   document.getElementById('active-ride').style.display = 'none';
   document.getElementById('ar-waiting').style.display = 'block';
   document.getElementById('ar-matched').style.display = 'none';
@@ -1049,9 +932,6 @@ function endRide() {
   document.getElementById('fare-row').style.display = 'none';
   document.getElementById('dist-badge').style.display = 'none';
   document.getElementById('book-btn').style.display = 'none';
-  document.getElementById('payment-section').style.display = 'none';
-  document.getElementById('digital-account-info').style.display = 'none';
-  document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.dataset.method === 'cash'));
   document.getElementById('map-hint').style.display = 'block';
   document.getElementById('map-hint').className = 'map-hint';
   document.getElementById('map-hint').textContent = 'Tap map or search a pickup location below';
@@ -1138,12 +1018,11 @@ async function loadRideHistory() {
     const el = document.getElementById('ride-history-list');
     if (!rides.length) { el.innerHTML = '<div class="empty-msg">No rides yet. Book your first ride!</div>'; return; }
     el.innerHTML = rides.map(r => {
-      const pm = r.paymentMethod ? (PAY_META[r.paymentMethod] || PAY_META.cash) : PAY_META.cash;
       return `<div class="ride-history-item ${r.status}">
         <div class="rh-route">${r.pickupLocation?.address || 'Pickup'} <span>→</span> ${r.dropoffLocation?.address || 'Dropoff'}</div>
         <div class="rh-meta">
           <span class="status-pill ${r.status}">${r.status}</span>
-          <span class="rh-fare">Rs ${r.fare} ${pm.icon}</span>
+          <span class="rh-fare">Rs ${r.fare} 💵</span>
           <span>${new Date(r.createdAt).toLocaleDateString()}</span>
         </div>
       </div>`;
@@ -1159,12 +1038,6 @@ function switchAppTab(name) {
   if (name === 'rides') loadRideHistory();
 }
 
-// ── Phone Formatting ──────────────────────────────────────────────────────
-function formatPhone(input) {
-  let v = input.value.replace(/\D/g, '');
-  if (v.length > 11) v = v.slice(0, 11);
-  input.value = v.length > 4 ? v.slice(0, 4) + '-' + v.slice(4) : v;
-}
 
 // ── Init ──────────────────────────────────────────────────────────────────
 if (token && user) bootApp();
