@@ -127,24 +127,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .btn-danger{flex:1;background:#2a0a0a;border:1px solid #cc3333;color:#ff6666;border-radius:10px;padding:.6rem;font-size:.85rem;cursor:pointer}
 .btn-secondary{flex:1;background:#0a0a1a;border:1px solid #333;color:#aaa;border-radius:10px;padding:.6rem;font-size:.85rem;cursor:pointer}
 
-/* ── Wallet Tab ── */
-.wallet-balance{background:linear-gradient(135deg,#1a2a0a,#0a1a0a);border:1px solid #2d5a2d;border-radius:16px;padding:1.25rem;margin-bottom:1rem;text-align:center}
-.balance-label{color:#888;font-size:.8rem;margin-bottom:.25rem}
-.balance-amount{font-size:2rem;font-weight:800;color:#4caf50}
-.balance-currency{font-size:1rem;color:#888;margin-left:.25rem}
-.wallet-pay-methods{display:flex;gap:.4rem;margin-bottom:.6rem}
-.wpm-btn{flex:1;background:#0a0a0f;border:1px solid #333;border-radius:8px;padding:.45rem .3rem;cursor:pointer;text-align:center;transition:all .2s;color:#fff;font-size:.72rem;font-weight:600}
-.wpm-btn.active{border-color:#f5c518;background:#1a1a0a;color:#f5c518}
-.add-funds-row{display:flex;gap:.5rem;margin-bottom:1rem}
-.amount-input{flex:1;background:#0a0a0f;border:1px solid #333;border-radius:10px;padding:.6rem 1rem;color:#fff;font-size:.9rem;outline:none}
-.btn-add{background:#f5c518;color:#0a0a0f;border:none;border-radius:10px;padding:.6rem 1.2rem;font-weight:700;cursor:pointer;white-space:nowrap}
-.tx-list{display:flex;flex-direction:column;gap:.5rem}
-.tx-item{display:flex;justify-content:space-between;align-items:center;background:#0a0a0f;border-radius:10px;padding:.6rem .8rem}
-.tx-desc{font-size:.85rem;color:#ccc}
-.tx-date{font-size:.7rem;color:#555;margin-top:.1rem}
-.tx-amount{font-size:.9rem;font-weight:600}
-.tx-amount.credit{color:#4caf50}
-.tx-amount.debit{color:#ff5555}
+/* ── empty-msg shared ── */
 .empty-msg{text-align:center;color:#444;padding:2rem;font-size:.9rem}
 
 /* ── Rides Tab ── */
@@ -161,9 +144,13 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .status-pill.requested{background:#2a2a1a;color:#f5c518}
 .status-pill.accepted,.status-pill.arrived,.status-pill.in-progress{background:#1a2a3a;color:#66aaff}
 
-/* ── SOS ── */
-#sos-btn{position:fixed;bottom:calc(var(--panel-h, 56px) + 1rem);right:1rem;z-index:40;width:52px;height:52px;background:#cc0000;border:none;border-radius:50%;color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:0 0 0 4px rgba(204,0,0,.25);animation:sos-pulse 2s infinite;display:none}
+/* ── SOS tab ── */
+.tab.sos-tab{color:#cc3333}
+.tab.sos-tab:hover,.tab.sos-tab:active{color:#ff5555;background:rgba(204,0,0,.08)}
 @keyframes sos-pulse{0%,100%{box-shadow:0 0 0 4px rgba(204,0,0,.25)}50%{box-shadow:0 0 0 8px rgba(204,0,0,.1)}}
+
+/* ── Distance badge ── */
+.dist-badge{display:inline-flex;align-items:center;gap:.3rem;background:#1a1a2a;border:1px solid #2a2a4a;border-radius:6px;padding:.2rem .55rem;font-size:.78rem;color:#88aaff;font-weight:600;margin-left:.3rem}
 
 /* ── Toast ── */
 .toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#222;border-radius:10px;padding:.6rem 1.2rem;font-size:.85rem;z-index:9999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;max-width:90vw;text-overflow:ellipsis;overflow:hidden}
@@ -241,7 +228,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
     <div class="tabs">
       <button class="tab active" onclick="switchAppTab('book')"><span class="tab-icon">📍</span>Book</button>
       <button class="tab" onclick="switchAppTab('rides')"><span class="tab-icon">🚗</span>Rides</button>
-      <button class="tab" onclick="switchAppTab('wallet')"><span class="tab-icon">💰</span>Wallet</button>
+      <button class="tab sos-tab" onclick="triggerSOS()"><span class="tab-icon">🆘</span>SOS</button>
     </div>
 
     <!-- ── BOOK TAB ── -->
@@ -299,6 +286,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
               <span class="fare-badge">inDrive</span>
             </div>
             <div class="fare-meta" id="fare-meta"></div>
+            <div style="margin-top:.25rem"><span class="dist-badge" id="dist-badge" style="display:none">📍 <span id="dist-km-val">0</span> km</span></div>
           </div>
           <div class="fare-suggested">
             <div class="fare-suggested-lbl">Suggested</div>
@@ -356,24 +344,6 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <div id="ride-history-list"><div class="empty-msg">Loading your rides…</div></div>
     </div>
 
-    <!-- WALLET TAB -->
-    <div class="tab-content" id="tab-wallet">
-      <div class="wallet-balance">
-        <div class="balance-label">Available Balance</div>
-        <div><span class="balance-amount" id="wallet-balance">0</span><span class="balance-currency">PKR</span></div>
-      </div>
-      <div class="section-label">Add Funds Via</div>
-      <div class="wallet-pay-methods">
-        <button class="wpm-btn active" data-wpm="easypaisa" onclick="selectWalletMethod(this)">📱 EasyPaisa</button>
-        <button class="wpm-btn" data-wpm="jazzcash" onclick="selectWalletMethod(this)">🎵 JazzCash</button>
-        <button class="wpm-btn" data-wpm="bank" onclick="selectWalletMethod(this)">🏦 Bank</button>
-      </div>
-      <div class="add-funds-row">
-        <input type="number" class="amount-input" id="fund-amount" placeholder="Enter amount (PKR)" min="100">
-        <button class="btn-add" onclick="addFunds()">Add Funds</button>
-      </div>
-      <div class="tx-list" id="tx-list"><div class="empty-msg">No transactions yet</div></div>
-    </div>
   </div>
 </div>
 
@@ -392,8 +362,6 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
   </div>
 </div>
 
-<!-- SOS -->
-<button id="sos-btn" onclick="triggerSOS()">🆘<br>SOS</button>
 <div class="toast" id="toast"></div>
 
 <!-- Payment Modal -->
@@ -415,24 +383,6 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
   </div>
 </div>
 
-<!-- Wallet Top-up Modal -->
-<div class="modal-overlay" id="wallet-modal">
-  <div class="modal-card">
-    <div class="modal-brand">
-      <div class="modal-brand-icon" id="wm-icon">📱</div>
-      <div><div class="modal-brand-name" id="wm-name">EasyPaisa</div><div class="modal-brand-sub" id="wm-sub">Enter your mobile wallet number</div></div>
-    </div>
-    <div class="modal-field">
-      <label id="wm-label">Mobile Number</label>
-      <input type="tel" id="wm-number" placeholder="03XX-XXXXXXX" maxlength="13" oninput="formatPhone(this)" inputmode="numeric">
-      <div class="modal-note" id="wm-note">Funds will be loaded to your MyRide wallet after verification.</div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-modal-cancel" onclick="closeWalletModal()">Cancel</button>
-      <button class="btn-modal-confirm" id="wm-confirm-btn" onclick="confirmWalletModal()">Add Funds</button>
-    </div>
-  </div>
-</div>
 
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -458,8 +408,6 @@ let routeDistanceKm = null;
 let offeredFare = 0;                   // customer's negotiated fare
 let selectedPaymentMethod = 'cash';
 let digitalAccountNumber = '';
-let walletPayMethod = 'easypaisa';
-let walletPendingAmount = 0;
 let activeRide = null;
 let socket = null;
 let locationWatchId = null;
@@ -524,17 +472,15 @@ function doLogout() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   document.getElementById('active-ride').style.display = 'none';
-  document.getElementById('sos-btn').style.display = 'none';
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 function bootApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  document.getElementById('sos-btn').style.display = 'block';
   document.getElementById('avatar-init').textContent = (user.name || '?')[0].toUpperCase();
   document.getElementById('header-name').textContent = user.name || user.email;
-  initMap(); connectSocket(); loadWallet(); loadRideHistory();
+  initMap(); connectSocket(); loadRideHistory();
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────
@@ -674,20 +620,24 @@ async function setDropoff(lat, lng, preDisplay = null) {
 }
 
 async function drawRoute() {
-  if (routeLine) routeLine.remove();
+  if (routeLine) { if (Array.isArray(routeLine)) routeLine.forEach(l => l.remove()); else routeLine.remove(); }
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}?overview=full&geometries=geojson`;
     const r = await fetch(url);
     const d = await r.json();
     if (d.routes && d.routes[0]) {
       const coords = d.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-      routeLine = L.polyline(coords, { color: '#f5c518', weight: 4, opacity: .8 }).addTo(map);
-      map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+      // Draw shadow + highlighted line for visual depth
+      const shadow = L.polyline(coords, { color: '#000', weight: 8, opacity: .35 }).addTo(map);
+      const line   = L.polyline(coords, { color: '#f5c518', weight: 5, opacity: 1 }).addTo(map);
+      routeLine = [shadow, line];
+      map.fitBounds(line.getBounds(), { padding: [50, 50] });
       return d.routes[0].distance / 1000;
     }
   } catch {}
   // Fallback straight line
-  routeLine = L.polyline([[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]], { color: '#f5c518', weight: 4, dashArray: '8,8' }).addTo(map);
+  const line = L.polyline([[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]], { color: '#f5c518', weight: 5, dashArray: '10,8', opacity: .9 }).addTo(map);
+  routeLine = [line];
   return haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
 }
 
@@ -710,8 +660,10 @@ function updateFare() {
   // Reset offer to suggested whenever vehicle or route changes
   offeredFare = suggested;
 
-  document.getElementById('fare-meta').textContent = `${dist.toFixed(1)} km × Rs ${rate}/km`;
+  document.getElementById('fare-meta').textContent = `Rs ${rate}/km`;
   document.getElementById('fare-suggested-val').textContent = `Rs ${suggested.toLocaleString()}`;
+  document.getElementById('dist-km-val').textContent = dist.toFixed(1);
+  document.getElementById('dist-badge').style.display = 'inline-flex';
   renderOfferedFare();
   document.getElementById('fare-row').style.display  = 'block';
   document.getElementById('book-btn').style.display  = 'block';
@@ -790,13 +742,6 @@ function confirmPaymentModal() {
   showToast(`${meta.name} account linked`, 'success');
 }
 
-// ── Wallet Payment Method ──────────────────────────────────────────────────
-function selectWalletMethod(btn) {
-  document.querySelectorAll('.wpm-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  walletPayMethod = btn.dataset.wpm;
-}
-
 // ── Book Ride ─────────────────────────────────────────────────────────────
 async function bookRide() {
   if (!pickup || !dropoff) return showToast('Set pickup & dropoff first', 'error');
@@ -858,7 +803,7 @@ function endRide() {
   document.getElementById('bottom-panel').style.display = 'block';
   if (pickupMarker)  { pickupMarker.remove();  pickupMarker  = null; }
   if (dropoffMarker) { dropoffMarker.remove(); dropoffMarker = null; }
-  if (routeLine)     { routeLine.remove();     routeLine     = null; }
+  if (routeLine)     { (Array.isArray(routeLine) ? routeLine : [routeLine]).forEach(l => l.remove()); routeLine = null; }
   if (driverMarker)  { driverMarker.remove();  driverMarker  = null; }
   pickup = null; dropoff = null; mapMode = 'pickup';
   document.getElementById('pickup-input').value  = '';
@@ -866,6 +811,7 @@ function endRide() {
   document.getElementById('pickup-input').classList.remove('has-val');
   document.getElementById('dropoff-input').classList.remove('has-val');
   document.getElementById('fare-row').style.display = 'none';
+  document.getElementById('dist-badge').style.display = 'none';
   document.getElementById('book-btn').style.display = 'none';
   document.getElementById('payment-section').style.display = 'none';
   document.getElementById('digital-account-info').style.display = 'none';
@@ -873,7 +819,7 @@ function endRide() {
   document.getElementById('map-hint').style.display = 'block';
   document.getElementById('map-hint').className = 'map-hint';
   document.getElementById('map-hint').textContent = 'Tap map or search a pickup location below';
-  loadWallet(); loadRideHistory();
+  loadRideHistory();
 }
 
 // ── Socket.io ─────────────────────────────────────────────────────────────
@@ -932,72 +878,6 @@ async function triggerSOS() {
   showToast('🆘 SOS alert sent! Help is on the way.', 'error');
 }
 
-// ── Wallet ─────────────────────────────────────────────────────────────────
-async function loadWallet() {
-  try {
-    const w = await apiCall('/api/wallet');
-    document.getElementById('wallet-balance').textContent = (+w.balance).toLocaleString();
-    const txList = document.getElementById('tx-list');
-    const txs = (w.transactions || []).slice().reverse();
-    if (!txs.length) { txList.innerHTML = '<div class="empty-msg">No transactions yet</div>'; return; }
-    txList.innerHTML = txs.map(tx => {
-      const pm = tx.paymentMethod ? (PAY_META[tx.paymentMethod] || null) : null;
-      return `<div class="tx-item">
-        <div><div class="tx-desc">${tx.description || tx.type}${pm ? ` <span style="font-size:.7rem;color:#666">${pm.icon}</span>` : ''}</div>
-        <div class="tx-date">${new Date(tx.createdAt).toLocaleDateString()}</div></div>
-        <div class="tx-amount ${tx.type}">${tx.type === 'credit' ? '+' : '-'}Rs ${(+tx.amount).toLocaleString()}</div>
-      </div>`;
-    }).join('');
-  } catch {}
-}
-
-async function addFunds() {
-  const amt = parseFloat(document.getElementById('fund-amount').value);
-  if (!amt || amt < 100) return showToast('Minimum top-up is Rs 100', 'error');
-  if (walletPayMethod === 'bank') {
-    try {
-      await apiCall('/api/wallet/add-funds', 'POST', { amount: amt, paymentMethod: 'bank' });
-      document.getElementById('fund-amount').value = '';
-      await loadWallet();
-      showToast(`Rs ${amt.toLocaleString()} added via Bank Transfer!`, 'success');
-    } catch (e) { showToast(e.message, 'error'); }
-    return;
-  }
-  walletPendingAmount = amt;
-  openWalletModal(walletPayMethod);
-}
-
-function openWalletModal(method) {
-  const meta = PAY_META[method];
-  document.getElementById('wm-icon').textContent = meta.icon;
-  document.getElementById('wm-name').textContent = meta.name;
-  document.getElementById('wm-sub').textContent = `Enter your ${meta.name} mobile number`;
-  document.getElementById('wm-label').textContent = `${meta.name} Mobile Number`;
-  document.getElementById('wm-confirm-btn').style.background = meta.btnColor;
-  document.getElementById('wm-confirm-btn').style.color = meta.btnText;
-  document.getElementById('wm-note').textContent = `Rs ${walletPendingAmount.toLocaleString()} will be deducted from your ${meta.name} account.`;
-  document.getElementById('wm-number').value = '';
-  document.getElementById('wallet-modal').classList.add('open');
-  setTimeout(() => document.getElementById('wm-number').focus(), 250);
-}
-
-function closeWalletModal() { document.getElementById('wallet-modal').classList.remove('open'); }
-
-async function confirmWalletModal() {
-  const num = document.getElementById('wm-number').value.replace(/\D/g, '');
-  if (num.length < 10) return showToast('Enter a valid 10–11 digit number', 'error');
-  const mobileAccount = document.getElementById('wm-number').value;
-  const pendingAmt = walletPendingAmount;
-  closeWalletModal();
-  try {
-    await apiCall('/api/wallet/add-funds', 'POST', { amount: pendingAmt, paymentMethod: walletPayMethod, mobileAccount });
-    document.getElementById('fund-amount').value = '';
-    walletPendingAmount = 0;
-    await loadWallet();
-    showToast(`Rs ${pendingAmt.toLocaleString()} added via ${PAY_META[walletPayMethod].name}!`, 'success');
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
 // ── Ride History ───────────────────────────────────────────────────────────
 async function loadRideHistory() {
   try {
@@ -1020,11 +900,10 @@ async function loadRideHistory() {
 
 // ── Tab Navigation ─────────────────────────────────────────────────────────
 function switchAppTab(name) {
-  document.querySelectorAll('.tab').forEach((b, i) => b.classList.toggle('active', ['book','rides','wallet'][i] === name));
+  document.querySelectorAll('.tab:not(.sos-tab)').forEach(b => b.classList.toggle('active', b.textContent.trim().toLowerCase().includes(name)));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
-  if (name === 'wallet') loadWallet();
-  if (name === 'rides')  loadRideHistory();
+  if (name === 'rides') loadRideHistory();
 }
 
 // ── Phone Formatting ──────────────────────────────────────────────────────
