@@ -36,3 +36,8 @@ waitForPort = 3000
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "ride-hailing/server.js"]
+build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev"]
