@@ -42,7 +42,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .btn-logout{background:none;border:1px solid #333;color:#888;border-radius:8px;padding:.3rem .7rem;font-size:.75rem;cursor:pointer}
 
 /* ── Bottom Panel ── */
-#bottom-panel{background:#13131a;border-top:1px solid #222;max-height:55vh;overflow-y:auto;flex-shrink:0;z-index:10}
+#bottom-panel{background:#13131a;border-top:1px solid #222;max-height:60vh;overflow-y:auto;flex-shrink:0;z-index:10}
 .tabs{display:flex;border-bottom:1px solid #222;background:#0a0a0f}
 .tab{flex:1;padding:.75rem;border:none;background:transparent;color:#666;font-size:.8rem;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:.15rem}
 .tab.active{color:#f5c518;border-bottom:2px solid #f5c518}
@@ -67,9 +67,22 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .vehicle-btn .v-fare{font-size:.6rem;color:#888}
 .vehicle-btn.active .v-fare{color:#a0a060}
 
+/* ── Fare Row ── */
 .fare-row{display:flex;justify-content:space-between;align-items:center;background:#0a0a0f;border-radius:10px;padding:.75rem 1rem;margin:.5rem 0}
 .fare-label{color:#888;font-size:.85rem}
 .fare-amount{font-size:1.2rem;font-weight:700;color:#f5c518}
+.fare-meta{font-size:.7rem;color:#555;margin-top:.1rem}
+
+/* ── Payment Method ── */
+.section-label{font-size:.75rem;color:#666;margin:.75rem 0 .4rem;text-transform:uppercase;letter-spacing:.04em}
+.payment-methods{display:flex;gap:.5rem;margin-bottom:.75rem}
+.pay-btn{flex:1;background:#0a0a0f;border:1px solid #333;border-radius:10px;padding:.55rem .4rem;cursor:pointer;text-align:center;transition:all .2s;color:#fff;display:flex;flex-direction:column;align-items:center;gap:.25rem}
+.pay-btn .pay-icon{font-size:1.2rem}
+.pay-btn .pay-name{font-size:.68rem;font-weight:600}
+.pay-btn .pay-sub{font-size:.6rem;color:#555}
+.pay-btn.active{border-color:#f5c518;background:#1a1a0a;color:#f5c518}
+.pay-btn.active .pay-sub{color:#a0a060}
+.pay-btn:hover:not(.active){border-color:#444}
 
 .map-hint{background:#1a1a2a;border:1px dashed #333;border-radius:10px;padding:.6rem 1rem;text-align:center;color:#666;font-size:.8rem;margin-bottom:.75rem}
 .map-hint.pickup-mode{border-color:#2266cc;color:#6699ff}
@@ -93,6 +106,9 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .balance-label{color:#888;font-size:.8rem;margin-bottom:.25rem}
 .balance-amount{font-size:2rem;font-weight:800;color:#4caf50}
 .balance-currency{font-size:1rem;color:#888;margin-left:.25rem}
+.wallet-pay-methods{display:flex;gap:.4rem;margin-bottom:.6rem}
+.wpm-btn{flex:1;background:#0a0a0f;border:1px solid #333;border-radius:8px;padding:.45rem .3rem;cursor:pointer;text-align:center;transition:all .2s;color:#fff;font-size:.72rem;font-weight:600}
+.wpm-btn.active{border-color:#f5c518;background:#1a1a0a;color:#f5c518}
 .add-funds-row{display:flex;gap:.5rem;margin-bottom:1rem}
 .amount-input{flex:1;background:#0a0a0f;border:1px solid #333;border-radius:10px;padding:.6rem 1rem;color:#fff;font-size:.9rem;outline:none}
 .btn-add{background:#f5c518;color:#0a0a0f;border:none;border-radius:10px;padding:.6rem 1.2rem;font-weight:700;cursor:pointer;white-space:nowrap}
@@ -129,6 +145,24 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .toast.success{border-left:3px solid #4caf50}
 .toast.error{border-left:3px solid #ff5555}
 .toast.info{border-left:3px solid #f5c518}
+
+/* ── Modal ── */
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal-card{background:#13131a;border:1px solid #333;border-radius:20px;padding:1.5rem;width:100%;max-width:340px;transform:translateY(20px);transition:transform .25s}
+.modal-overlay.open .modal-card{transform:translateY(0)}
+.modal-brand{display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem}
+.modal-brand-icon{font-size:2.2rem;line-height:1}
+.modal-brand-name{font-size:1.1rem;font-weight:700}
+.modal-brand-sub{font-size:.8rem;color:#888;margin-top:.1rem}
+.modal-field label{display:block;font-size:.8rem;color:#888;margin-bottom:.4rem}
+.modal-field input{width:100%;background:#0a0a0f;border:1px solid #333;border-radius:10px;padding:.75rem 1rem;color:#fff;font-size:1rem;outline:none;transition:border-color .2s;letter-spacing:.05em}
+.modal-field input:focus{border-color:#f5c518}
+.modal-note{font-size:.75rem;color:#555;margin-top:.4rem}
+.modal-actions{display:flex;gap:.5rem;margin-top:1.25rem}
+.btn-modal-cancel{flex:1;background:#0a0a0f;border:1px solid #333;color:#888;border-radius:10px;padding:.7rem;font-size:.9rem;cursor:pointer}
+.btn-modal-confirm{flex:2;border:none;border-radius:10px;padding:.7rem;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s}
+.btn-modal-confirm:hover{opacity:.9}
 
 /* ── Leaflet overrides ── */
 .leaflet-container{background:#1a1a2a}
@@ -218,9 +252,45 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
         </button>
       </div>
 
+      <!-- Fare Display -->
       <div class="fare-row" id="fare-row" style="display:none">
-        <span class="fare-label">Estimated Fare</span>
+        <div>
+          <span class="fare-label">Estimated Fare</span>
+          <div class="fare-meta" id="fare-meta"></div>
+        </div>
         <span class="fare-amount" id="fare-display">Rs 0</span>
+      </div>
+
+      <!-- Payment Method (shown after both locations set) -->
+      <div id="payment-section" style="display:none">
+        <div class="section-label">Pay With</div>
+        <div class="payment-methods">
+          <button class="pay-btn active" data-method="cash" onclick="selectPayment(this)">
+            <span class="pay-icon">💵</span>
+            <span class="pay-name">Cash</span>
+            <span class="pay-sub">On delivery</span>
+          </button>
+          <button class="pay-btn" data-method="easypaisa" onclick="selectPayment(this)">
+            <span class="pay-icon">📱</span>
+            <span class="pay-name">EasyPaisa</span>
+            <span class="pay-sub">Mobile wallet</span>
+          </button>
+          <button class="pay-btn" data-method="jazzcash" onclick="selectPayment(this)">
+            <span class="pay-icon">🎵</span>
+            <span class="pay-name">JazzCash</span>
+            <span class="pay-sub">Mobile wallet</span>
+          </button>
+        </div>
+        <div id="digital-account-info" style="display:none">
+          <div style="background:#1a1a0a;border:1px solid #333;border-radius:10px;padding:.6rem .85rem;display:flex;align-items:center;gap:.6rem">
+            <span id="digital-pay-icon" style="font-size:1.3rem">📱</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.75rem;color:#888" id="digital-pay-label">Account</div>
+              <div style="font-size:.9rem;font-weight:600;color:#f5c518" id="digital-pay-number">—</div>
+            </div>
+            <button onclick="openPaymentModal(selectedPaymentMethod)" style="background:none;border:1px solid #444;color:#888;border-radius:7px;padding:.2rem .55rem;font-size:.75rem;cursor:pointer">Change</button>
+          </div>
+        </div>
       </div>
 
       <button class="btn-primary" id="book-btn" onclick="bookRide()" style="display:none">Book Ride 🚗</button>
@@ -237,6 +307,14 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
         <div class="balance-label">Available Balance</div>
         <div><span class="balance-amount" id="wallet-balance">0</span><span class="balance-currency">PKR</span></div>
       </div>
+
+      <div class="section-label">Add Funds Via</div>
+      <div class="wallet-pay-methods">
+        <button class="wpm-btn active" data-wpm="easypaisa" onclick="selectWalletMethod(this)">📱 EasyPaisa</button>
+        <button class="wpm-btn" data-wpm="jazzcash" onclick="selectWalletMethod(this)">🎵 JazzCash</button>
+        <button class="wpm-btn" data-wpm="bank" onclick="selectWalletMethod(this)">🏦 Bank</button>
+      </div>
+
       <div class="add-funds-row">
         <input type="number" class="amount-input" id="fund-amount" placeholder="Enter amount (PKR)" min="100">
         <button class="btn-add" onclick="addFunds()">Add Funds</button>
@@ -253,7 +331,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
     <div class="ride-info-card"><div class="ride-info-label">Driver</div><div class="ride-info-val" id="ar-driver">—</div></div>
     <div class="ride-info-card"><div class="ride-info-label">Fare</div><div class="ride-info-val" id="ar-fare">—</div></div>
     <div class="ride-info-card"><div class="ride-info-label">Vehicle</div><div class="ride-info-val" id="ar-vehicle">—</div></div>
-    <div class="ride-info-card"><div class="ride-info-label">ETA</div><div class="ride-info-val" id="ar-eta">—</div></div>
+    <div class="ride-info-card"><div class="ride-info-label">Payment</div><div class="ride-info-val" id="ar-payment">—</div></div>
   </div>
   <div class="ride-actions">
     <button class="btn-danger" onclick="cancelRide()">Cancel Ride</button>
@@ -267,12 +345,65 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- ── Payment Modal ── -->
+<div class="modal-overlay" id="payment-modal">
+  <div class="modal-card">
+    <div class="modal-brand">
+      <div class="modal-brand-icon" id="pm-icon">📱</div>
+      <div>
+        <div class="modal-brand-name" id="pm-name">EasyPaisa</div>
+        <div class="modal-brand-sub" id="pm-sub">Enter your mobile wallet number</div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label id="pm-label">Mobile Number</label>
+      <input type="tel" id="pm-number" placeholder="03XX-XXXXXXX" maxlength="13"
+             oninput="formatPhone(this)" inputmode="numeric">
+      <div class="modal-note" id="pm-note">Amount will be deducted from your <span id="pm-name2">EasyPaisa</span> account after ride confirmation.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closePaymentModal()">Cancel</button>
+      <button class="btn-modal-confirm" id="pm-confirm-btn" onclick="confirmPaymentModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Wallet Top-up Modal ── -->
+<div class="modal-overlay" id="wallet-modal">
+  <div class="modal-card">
+    <div class="modal-brand">
+      <div class="modal-brand-icon" id="wm-icon">📱</div>
+      <div>
+        <div class="modal-brand-name" id="wm-name">EasyPaisa</div>
+        <div class="modal-brand-sub" id="wm-sub">Enter your mobile wallet number</div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label id="wm-label">Mobile Number</label>
+      <input type="tel" id="wm-number" placeholder="03XX-XXXXXXX" maxlength="13"
+             oninput="formatPhone(this)" inputmode="numeric">
+      <div class="modal-note" id="wm-note">Funds will be loaded to your MyRide wallet after verification.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeWalletModal()">Cancel</button>
+      <button class="btn-modal-confirm" id="wm-confirm-btn" onclick="confirmWalletModal()">Add Funds</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Constants ──────────────────────────────────────────────────────────────
 const API = '';
 const FARE_RATES = { 'Bike': 30, 'Rickshaw': 40, 'Car Mini': 50, 'Car AC': 70 };
 const MIN_FARES  = { 'Bike': 50, 'Rickshaw': 70, 'Car Mini': 100, 'Car AC': 150 };
 const TILE_URL   = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+const PAY_META = {
+  cash:       { icon: '💵', name: 'Cash',      color: '#4caf50', btnColor: '#4caf50', btnText: '#000' },
+  easypaisa:  { icon: '📱', name: 'EasyPaisa', color: '#00a651', btnColor: '#00a651', btnText: '#fff' },
+  jazzcash:   { icon: '🎵', name: 'JazzCash',  color: '#d7211d', btnColor: '#d7211d', btnText: '#fff' },
+  bank:       { icon: '🏦', name: 'Bank Transfer', color: '#3399ff', btnColor: '#3399ff', btnText: '#fff' }
+};
 
 // ── State ─────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('rh_token');
@@ -281,6 +412,11 @@ let map, pickupMarker, dropoffMarker, routeLine, driverMarker;
 let pickup = null, dropoff = null;
 let mapMode = 'pickup'; // 'pickup' | 'dropoff' | 'idle'
 let selectedVehicle = 'Bike';
+let routeDistanceKm = null;   // set by drawRoute() from OSRM; used for fare
+let selectedPaymentMethod = 'cash';
+let digitalAccountNumber = ''; // stored number for EasyPaisa/JazzCash
+let walletPayMethod = 'easypaisa';
+let walletPendingAmount = 0;
 let activeRide = null;
 let socket = null;
 let locationWatchId = null;
@@ -378,7 +514,6 @@ function initMap() {
     }
   });
 
-  // Try to get user location
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(pos => {
       map.setView([pos.coords.latitude, pos.coords.longitude], 15);
@@ -408,7 +543,6 @@ async function setPickup(lat, lng) {
   pickup.address = addr;
   document.getElementById('pickup-input').value = addr;
 
-  // Switch to dropoff mode
   mapMode = 'dropoff';
   const hint = document.getElementById('map-hint');
   hint.textContent = 'Now tap to set dropoff location';
@@ -428,7 +562,12 @@ async function setDropoff(lat, lng) {
 
   mapMode = 'idle';
   document.getElementById('map-hint').style.display = 'none';
-  if (pickup) { await drawRoute(); updateFare(); }
+  if (pickup) {
+    const distKm = await drawRoute();
+    routeDistanceKm = distKm;
+    updateFare();
+    showPaymentSection();
+  }
 }
 
 async function drawRoute() {
@@ -441,10 +580,10 @@ async function drawRoute() {
       const coords = d.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
       routeLine = L.polyline(coords, { color: '#f5c518', weight: 4, opacity: .8 }).addTo(map);
       map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
-      return d.routes[0].distance / 1000; // km
+      return d.routes[0].distance / 1000; // km from OSRM
     }
   } catch {}
-  // Fallback straight line
+  // Fallback: straight-line haversine
   routeLine = L.polyline([[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]], { color: '#f5c518', weight: 4, dashArray: '8,8' }).addTo(map);
   return haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
 }
@@ -457,11 +596,16 @@ function haversine(lat1, lng1, lat2, lng2) {
 
 function updateFare() {
   if (!pickup || !dropoff) return;
-  const dist = haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
-  const rate  = FARE_RATES[selectedVehicle] || 50;
-  const min   = MIN_FARES[selectedVehicle] || 100;
-  const fare  = Math.max(Math.round(dist * rate), min);
-  document.getElementById('fare-display').textContent = `Rs ${fare}`;
+  // Prefer OSRM route distance; fall back to straight-line haversine
+  const dist = routeDistanceKm !== null
+    ? routeDistanceKm
+    : haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+  const rate = FARE_RATES[selectedVehicle] || 50;
+  const min  = MIN_FARES[selectedVehicle] || 100;
+  const fare = Math.max(Math.round(dist * rate), min);
+
+  document.getElementById('fare-display').textContent = `Rs ${fare.toLocaleString()}`;
+  document.getElementById('fare-meta').textContent = `${dist.toFixed(1)} km × Rs ${rate}/km`;
   document.getElementById('fare-row').style.display  = 'flex';
   document.getElementById('book-btn').style.display  = 'block';
 }
@@ -473,17 +617,92 @@ function selectVehicle(btn) {
   updateFare();
 }
 
+// ── Payment Method (Book Tab) ─────────────────────────────────────────────
+function showPaymentSection() {
+  document.getElementById('payment-section').style.display = 'block';
+}
+
+function selectPayment(btn) {
+  document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const method = btn.dataset.method;
+  selectedPaymentMethod = method;
+
+  if (method === 'cash') {
+    digitalAccountNumber = '';
+    document.getElementById('digital-account-info').style.display = 'none';
+  } else {
+    // Open modal immediately
+    openPaymentModal(method);
+  }
+}
+
+function openPaymentModal(method) {
+  const meta = PAY_META[method];
+  document.getElementById('pm-icon').textContent = meta.icon;
+  document.getElementById('pm-name').textContent = meta.name;
+  document.getElementById('pm-name2').textContent = meta.name;
+  document.getElementById('pm-sub').textContent = `Enter your ${meta.name} mobile number`;
+  document.getElementById('pm-label').textContent = `${meta.name} Mobile Number`;
+  document.getElementById('pm-confirm-btn').style.background = meta.btnColor;
+  document.getElementById('pm-confirm-btn').style.color = meta.btnText;
+  document.getElementById('pm-number').value = digitalAccountNumber || '';
+  document.getElementById('payment-modal').classList.add('open');
+  setTimeout(() => document.getElementById('pm-number').focus(), 250);
+}
+
+function closePaymentModal() {
+  document.getElementById('payment-modal').classList.remove('open');
+  // Revert to cash if no number entered
+  if (!digitalAccountNumber) {
+    selectedPaymentMethod = 'cash';
+    document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.dataset.method === 'cash'));
+    document.getElementById('digital-account-info').style.display = 'none';
+  }
+}
+
+function confirmPaymentModal() {
+  const num = document.getElementById('pm-number').value.replace(/\D/g, '');
+  if (num.length < 10) return showToast('Enter a valid 10–11 digit number', 'error');
+  digitalAccountNumber = document.getElementById('pm-number').value;
+  document.getElementById('payment-modal').classList.remove('open');
+
+  // Show inline account info
+  const meta = PAY_META[selectedPaymentMethod];
+  document.getElementById('digital-pay-icon').textContent = meta.icon;
+  document.getElementById('digital-pay-label').textContent = meta.name + ' Account';
+  document.getElementById('digital-pay-number').textContent = digitalAccountNumber;
+  document.getElementById('digital-account-info').style.display = 'block';
+  showToast(`${meta.name} account linked`, 'success');
+}
+
+// ── Wallet Payment Method ─────────────────────────────────────────────────
+function selectWalletMethod(btn) {
+  document.querySelectorAll('.wpm-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  walletPayMethod = btn.dataset.wpm;
+}
+
 // ── Book Ride ──────────────────────────────────────────────────────────────
 async function bookRide() {
   if (!pickup || !dropoff) return showToast('Set pickup & dropoff first', 'error');
-  const dist = haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+  if ((selectedPaymentMethod === 'easypaisa' || selectedPaymentMethod === 'jazzcash') && !digitalAccountNumber) {
+    return showToast('Enter your mobile account number first', 'error');
+  }
+
+  const dist = routeDistanceKm !== null
+    ? routeDistanceKm
+    : haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
   const fare = Math.max(Math.round(dist * (FARE_RATES[selectedVehicle]||50)), MIN_FARES[selectedVehicle]||100);
+
   try {
     const ride = await apiCall('/api/rides', 'POST', {
       pickupLocation:  { ...pickup },
       dropoffLocation: { ...dropoff },
       fare, distance: +dist.toFixed(2),
-      vehicleType: selectedVehicle
+      vehicleType: selectedVehicle,
+      paymentMethod: selectedPaymentMethod,
+      ...(digitalAccountNumber ? { mobileAccount: digitalAccountNumber } : {})
     });
     activeRide = ride;
     showActiveRide(ride);
@@ -499,6 +718,9 @@ function showActiveRide(ride) {
   document.getElementById('ar-fare').textContent = `Rs ${ride.fare}`;
   document.getElementById('ar-vehicle').textContent = ride.vehicleType || '—';
   document.getElementById('ar-driver').textContent = ride.driver?.name || 'Finding…';
+  const pm = ride.paymentMethod || 'cash';
+  const meta = PAY_META[pm] || PAY_META.cash;
+  document.getElementById('ar-payment').textContent = `${meta.icon} ${meta.name}`;
 }
 
 function statusLabel(s) {
@@ -516,6 +738,9 @@ async function cancelRide() {
 
 function endRide() {
   activeRide = null;
+  routeDistanceKm = null;
+  digitalAccountNumber = '';
+  selectedPaymentMethod = 'cash';
   document.getElementById('active-ride').style.display = 'none';
   document.getElementById('bottom-panel').style.display = 'block';
   if (pickupMarker)  { pickupMarker.remove();  pickupMarker  = null; }
@@ -529,6 +754,9 @@ function endRide() {
   document.getElementById('dropoff-input').classList.remove('has-val');
   document.getElementById('fare-row').style.display = 'none';
   document.getElementById('book-btn').style.display = 'none';
+  document.getElementById('payment-section').style.display = 'none';
+  document.getElementById('digital-account-info').style.display = 'none';
+  document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.dataset.method === 'cash'));
   document.getElementById('map-hint').style.display = 'block';
   document.getElementById('map-hint').className = 'map-hint';
   document.getElementById('map-hint').textContent = 'Tap on the map to set pickup location';
@@ -616,22 +844,75 @@ async function loadWallet() {
     const txList = document.getElementById('tx-list');
     const txs = (w.transactions || []).slice().reverse();
     if (!txs.length) { txList.innerHTML = '<div class="empty-msg">No transactions yet</div>'; return; }
-    txList.innerHTML = txs.map(tx => `
+    txList.innerHTML = txs.map(tx => {
+      const pm = tx.paymentMethod ? (PAY_META[tx.paymentMethod] || PAY_META.cash) : null;
+      const pmBadge = pm ? `<span style="font-size:.7rem;color:#666;margin-left:.3rem">${pm.icon}</span>` : '';
+      return `
       <div class="tx-item">
-        <div><div class="tx-desc">${tx.description || tx.type}</div><div class="tx-date">${new Date(tx.createdAt).toLocaleDateString()}</div></div>
+        <div>
+          <div class="tx-desc">${tx.description || tx.type}${pmBadge}</div>
+          <div class="tx-date">${new Date(tx.createdAt).toLocaleDateString()}</div>
+        </div>
         <div class="tx-amount ${tx.type}">${tx.type === 'credit' ? '+' : '-'}Rs ${(+tx.amount).toLocaleString()}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch {}
 }
 
 async function addFunds() {
   const amt = parseFloat(document.getElementById('fund-amount').value);
   if (!amt || amt < 100) return showToast('Minimum top-up is Rs 100', 'error');
+
+  if (walletPayMethod === 'bank') {
+    // Bank: no modal, simulate direct
+    try {
+      await apiCall('/api/wallet/add-funds', 'POST', { amount: amt, paymentMethod: 'bank' });
+      document.getElementById('fund-amount').value = '';
+      await loadWallet();
+      showToast(`Rs ${amt.toLocaleString()} added via Bank Transfer!`, 'success');
+    } catch (e) { showToast(e.message, 'error'); }
+    return;
+  }
+
+  // EasyPaisa / JazzCash — open modal
+  walletPendingAmount = amt;
+  openWalletModal(walletPayMethod);
+}
+
+function openWalletModal(method) {
+  const meta = PAY_META[method];
+  document.getElementById('wm-icon').textContent = meta.icon;
+  document.getElementById('wm-name').textContent = meta.name;
+  document.getElementById('wm-sub').textContent = `Enter your ${meta.name} mobile number`;
+  document.getElementById('wm-label').textContent = `${meta.name} Mobile Number`;
+  document.getElementById('wm-confirm-btn').style.background = meta.btnColor;
+  document.getElementById('wm-confirm-btn').style.color = meta.btnText;
+  document.getElementById('wm-note').textContent = `Rs ${walletPendingAmount.toLocaleString()} will be deducted from your ${meta.name} account.`;
+  document.getElementById('wm-number').value = '';
+  document.getElementById('wallet-modal').classList.add('open');
+  setTimeout(() => document.getElementById('wm-number').focus(), 250);
+}
+
+function closeWalletModal() {
+  document.getElementById('wallet-modal').classList.remove('open');
+}
+
+async function confirmWalletModal() {
+  const num = document.getElementById('wm-number').value.replace(/\D/g, '');
+  if (num.length < 10) return showToast('Enter a valid 10–11 digit number', 'error');
+  const mobileAccount = document.getElementById('wm-number').value;
+  closeWalletModal();
   try {
-    await apiCall('/api/wallet/add-funds', 'POST', { amount: amt });
+    await apiCall('/api/wallet/add-funds', 'POST', {
+      amount: walletPendingAmount,
+      paymentMethod: walletPayMethod,
+      mobileAccount
+    });
     document.getElementById('fund-amount').value = '';
+    walletPendingAmount = 0;
     await loadWallet();
-    showToast(`Rs ${amt.toLocaleString()} added to wallet!`, 'success');
+    const meta = PAY_META[walletPayMethod];
+    showToast(`Rs ${walletPendingAmount || ''} added via ${meta.name}!`, 'success');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -641,15 +922,18 @@ async function loadRideHistory() {
     const rides = await apiCall('/api/rides/my');
     const el = document.getElementById('ride-history-list');
     if (!rides.length) { el.innerHTML = '<div class="empty-msg">No rides yet. Book your first ride!</div>'; return; }
-    el.innerHTML = rides.map(r => `
+    el.innerHTML = rides.map(r => {
+      const pm = r.paymentMethod ? (PAY_META[r.paymentMethod] || PAY_META.cash) : PAY_META.cash;
+      return `
       <div class="ride-history-item ${r.status}">
         <div class="rh-route">${r.pickupLocation?.address || 'Pickup'} <span>→</span> ${r.dropoffLocation?.address || 'Dropoff'}</div>
         <div class="rh-meta">
           <span class="status-pill ${r.status}">${r.status}</span>
-          <span class="rh-fare">Rs ${r.fare}</span>
+          <span class="rh-fare">Rs ${r.fare} <span style="font-size:.75rem;color:#888">${pm.icon}</span></span>
           <span>${new Date(r.createdAt).toLocaleDateString()}</span>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch {}
 }
 
@@ -660,6 +944,18 @@ function switchAppTab(name) {
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'wallet') loadWallet();
   if (name === 'rides')  loadRideHistory();
+}
+
+// ── Phone Formatting ──────────────────────────────────────────────────────
+function formatPhone(input) {
+  let v = input.value.replace(/\D/g, '');
+  if (v.length > 11) v = v.slice(0, 11);
+  // Format: 03XX-XXXXXXX
+  if (v.length > 4) {
+    input.value = v.slice(0, 4) + '-' + v.slice(4);
+  } else {
+    input.value = v;
+  }
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

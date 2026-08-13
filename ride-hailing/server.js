@@ -91,18 +91,22 @@ const rideSchema = new mongoose.Schema({
     lat: { type: Number, default: null },
     lng: { type: Number, default: null }
   },
-  vehicleType: { type: String, default: 'Car Mini' },
-  notes:       { type: String, default: '' }
+  vehicleType:   { type: String, default: 'Car Mini' },
+  notes:         { type: String, default: '' },
+  paymentMethod: { type: String, enum: ['cash', 'easypaisa', 'jazzcash', 'wallet'], default: 'cash' },
+  mobileAccount: { type: String, default: '' }
 }, { timestamps: true });
 
 const walletSchema = new mongoose.Schema({
   user:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', unique: true },
   balance: { type: Number, default: 0 },
   transactions: [{
-    amount:      Number,
-    type:        { type: String, enum: ['credit', 'debit'] },
-    description: String,
-    createdAt:   { type: Date, default: Date.now }
+    amount:        Number,
+    type:          { type: String, enum: ['credit', 'debit'] },
+    description:   String,
+    paymentMethod: { type: String, default: '' },
+    mobileAccount: { type: String, default: '' },
+    createdAt:     { type: Date, default: Date.now }
   }]
 }, { timestamps: true });
 
@@ -239,16 +243,18 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 
 app.post('/api/rides', authMiddleware, async (req, res) => {
   try {
-    const { pickupLocation, dropoffLocation, fare, distance, vehicleType, notes } = req.body;
+    const { pickupLocation, dropoffLocation, fare, distance, vehicleType, notes, paymentMethod, mobileAccount } = req.body;
     if (!pickupLocation || !dropoffLocation || !fare) {
       return res.status(400).json({ error: 'Pickup, dropoff and fare are required' });
     }
     const ride = await Ride.create({
       passenger: req.user.id,
       pickupLocation, dropoffLocation, fare,
-      distance:    distance    || 0,
-      vehicleType: vehicleType || 'Car Mini',
-      notes:       notes       || ''
+      distance:      distance      || 0,
+      vehicleType:   vehicleType   || 'Car Mini',
+      notes:         notes         || '',
+      paymentMethod: paymentMethod || 'cash',
+      mobileAccount: mobileAccount || ''
     });
 
     // Broadcast to all online drivers
@@ -259,6 +265,7 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
       fare:            ride.fare,
       distance:        ride.distance,
       vehicleType:     ride.vehicleType,
+      paymentMethod:   ride.paymentMethod,
       notes:           ride.notes,
       createdAt:       ride.createdAt
     });
@@ -409,10 +416,18 @@ app.post('/api/wallet/add-funds', authMiddleware, async (req, res) => {
   try {
     const amount = Number(req.body.amount);
     if (!amount || amount <= 0) return res.status(400).json({ error: 'Valid amount required' });
+    const { paymentMethod, mobileAccount } = req.body;
+    const PM_LABELS = { easypaisa: 'EasyPaisa', jazzcash: 'JazzCash', bank: 'Bank Transfer', cash: 'Cash' };
+    const pmLabel = PM_LABELS[paymentMethod] || 'Wallet top-up';
     const wallet = await Wallet.findOneAndUpdate(
       { user: req.user.id },
       { $inc: { balance: amount },
-        $push: { transactions: { amount, type: 'credit', description: 'Wallet top-up' } } },
+        $push: { transactions: {
+          amount, type: 'credit',
+          description: `Top-up via ${pmLabel}`,
+          paymentMethod: paymentMethod || '',
+          mobileAccount: mobileAccount || ''
+        } } },
       { new: true, upsert: true }
     );
     res.json(wallet);
