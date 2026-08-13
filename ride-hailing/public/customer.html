@@ -621,21 +621,45 @@ async function reverseGeocode(lat, lng) {
 // ── Location Autocomplete ─────────────────────────────────────────────────
 async function searchPlaces(query) {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&countrycodes=pk&addressdetails=1`;
-    const r = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const r = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
     return await r.json();
   } catch { return []; }
 }
 
+// Build the best human-readable label from a geocode result
+function buildLabel(item) {
+  const a = item.address || {};
+  const nn = item.namedetails?.name || item.namedetails?.['name:en'] || '';
+  // Most specific name first
+  const primary =
+    nn ||
+    a.neighbourhood || a.suburb || a.quarter ||
+    a.road          || a.footway || a.pedestrian ||
+    a.village       || a.hamlet  ||
+    a.town          || a.city    ||
+    (item.display_name || '').split(',')[0];
+
+  // Context: city / district / province — skip the country
+  const parts = (item.display_name || '').split(',').map(p => p.trim());
+  const skip  = new Set([primary, 'Pakistan']);
+  const ctx   = parts.filter(p => p && !skip.has(p)).slice(0, 3).join(', ');
+  return { primary, secondary: ctx };
+}
+
 function renderDropdown(type, results) {
   const dd = document.getElementById(`${type}-dropdown`);
-  if (!results || !results.length) { dd.className = 'location-dropdown'; return; }
+  if (!results || !results.length) {
+    dd.innerHTML = '<div class="loc-loading" style="color:#888">No results found</div>';
+    dd.className = 'location-dropdown open';
+    setTimeout(() => { dd.className = 'location-dropdown'; }, 1800);
+    return;
+  }
   dd.innerHTML = results.map(item => {
-    const parts = item.display_name.split(',');
-    const primary   = parts.slice(0, 2).join(',').trim();
-    const secondary = parts.slice(2, 4).join(',').trim();
-    // Escape for inline onclick — store index approach
-    return `<div class="loc-item" onmousedown="pickFromSearch(event,'${type}',${item.lat},${item.lon},${JSON.stringify(primary)})">
+    const { primary, secondary } = buildLabel(item);
+    const safePrimary = JSON.stringify(primary);
+    return `<div class="loc-item"
+        onmousedown="pickFromSearch(event,'${type}',${item.lat},${item.lon},${safePrimary})"
+        ontouchstart="pickFromSearch(event,'${type}',${item.lat},${item.lon},${safePrimary})">
       <div class="loc-primary">${primary}</div>
       ${secondary ? `<div class="loc-secondary">${secondary}</div>` : ''}
     </div>`;
@@ -644,7 +668,8 @@ function renderDropdown(type, results) {
 }
 
 function pickFromSearch(e, type, lat, lng, display) {
-  e.preventDefault(); // prevent blur from firing first
+  e.preventDefault(); // prevent blur (desktop) or scroll (mobile) from firing first
+  e.stopPropagation();
   closeDropdown(type);
   if (type === 'pickup')  setPickup(+lat, +lng, display);
   else                    setDropoff(+lat, +lng, display);
@@ -688,18 +713,22 @@ async function setPickup(lat, lng, preDisplay = null) {
   const addr = preDisplay || await reverseGeocode(lat, lng);
   pickup.address = addr;
   document.getElementById('pickup-input').value = addr;
-  if (!preDisplay) map.setView([lat, lng], 15);
 
   mapMode = 'dropoff';
   const hint = document.getElementById('map-hint');
-  hint.textContent = 'Tap map or search a dropoff location';
+  hint.textContent = 'Now search or tap your dropoff location';
   hint.className = 'map-hint dropoff-mode';
   hint.style.display = 'block';
+
   if (dropoff) {
+    // Both points set — draw route; fitBounds will pan the map
     const distKm = await drawRoute();
     routeDistanceKm = distKm;
     updateFare();
     showPaymentSection();
+  } else {
+    // Only pickup set — pan to show the new marker
+    map.setView([lat, lng], 14);
   }
 }
 
@@ -716,11 +745,16 @@ async function setDropoff(lat, lng, preDisplay = null) {
 
   mapMode = 'idle';
   document.getElementById('map-hint').style.display = 'none';
+
   if (pickup) {
+    // Both points set — draw route; fitBounds will pan/zoom to show both markers
     const distKm = await drawRoute();
     routeDistanceKm = distKm;
     updateFare();
     showPaymentSection();
+  } else {
+    // Only dropoff set — pan to show the new marker
+    map.setView([lat, lng], 14);
   }
 }
 

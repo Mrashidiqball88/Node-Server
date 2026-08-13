@@ -771,6 +771,48 @@ app.post('/api/sos', authMiddleware, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Geocode Proxy — forwards to LocationIQ (if LOCATIONIQ_KEY set) or Nominatim
+// Keeps API keys server-side and adds a proper User-Agent for Nominatim ToS.
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get('/api/geocode', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q || q.length < 2) return res.json([]);
+
+  try {
+    const key = process.env.LOCATIONIQ_KEY;
+    let url, headers = {};
+
+    if (key) {
+      // LocationIQ — superior Pakistani locality / neighbourhood data
+      url = `https://us1.locationiq.com/v1/search` +
+            `?key=${encodeURIComponent(key)}` +
+            `&q=${encodeURIComponent(q)}` +
+            `&format=json&limit=8&countrycodes=pk` +
+            `&addressdetails=1&normalizeaddress=1&dedupe=1&namedetails=1`;
+    } else {
+      // Enhanced Nominatim fallback (OSM data, good for major Pakistani areas)
+      url = `https://nominatim.openstreetmap.org/search` +
+            `?q=${encodeURIComponent(q)}` +
+            `&format=json&limit=8&countrycodes=pk` +
+            `&addressdetails=1&dedupe=1&namedetails=1`;
+      headers = {
+        'User-Agent': 'MyRide-App/1.0 (ride-hailing)',
+        'Accept-Language': 'en,ur'
+      };
+    }
+
+    const r = await fetch(url, { headers, signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw new Error(`Geocode upstream ${r.status}`);
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error('Geocode error:', err.message);
+    res.json([]);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Health Check
 // ─────────────────────────────────────────────────────────────────────────────
 
