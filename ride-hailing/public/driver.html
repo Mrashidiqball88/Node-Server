@@ -110,12 +110,13 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 #payments-panel{display:none;background:#0d1117;flex:1;overflow-y:auto;padding:1rem;flex-shrink:0;max-height:45vh}
 .wallet-status-card{background:linear-gradient(135deg,#0d1f0d,#0a0a0f);border:1px solid #2d5a2d;border-radius:14px;padding:1rem;margin-bottom:1rem}
 .ws-title{font-size:.75rem;color:#666;margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.05em}
-.ws-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.5rem}
+.ws-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem}
 .ws-item{text-align:center;background:#0a0a0f;border-radius:8px;padding:.5rem}
 .ws-val{font-size:.95rem;font-weight:700}
 .ws-val.target{color:#f5c518}
 .ws-val.approved{color:#4caf50}
 .ws-val.remaining{color:#ff9933}
+.ws-val.earnings{color:#29b6f6}
 .ws-lbl{font-size:.6rem;color:#555;margin-top:.15rem}
 .ws-progress{height:6px;background:#1a1a2a;border-radius:3px;margin-top:.6rem;overflow:hidden}
 .ws-progress-fill{height:100%;background:linear-gradient(90deg,#4caf50,#66cc44);border-radius:3px;transition:width .4s}
@@ -266,7 +267,8 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <div class="ws-title">Daily Target Status</div>
       <div class="ws-grid">
         <div class="ws-item"><div class="ws-val target" id="ws-target">—</div><div class="ws-lbl">Target (Rs)</div></div>
-        <div class="ws-item"><div class="ws-val approved" id="ws-approved">0</div><div class="ws-lbl">Approved (Rs)</div></div>
+        <div class="ws-item"><div class="ws-val approved" id="ws-approved">0</div><div class="ws-lbl">Approved TRX (Rs)</div></div>
+        <div class="ws-item"><div class="ws-val earnings" id="ws-ride-earnings">0</div><div class="ws-lbl">Today's Ride Earnings (Rs)</div></div>
         <div class="ws-item"><div class="ws-val remaining" id="ws-remaining">—</div><div class="ws-lbl">Remaining (Rs)</div></div>
       </div>
       <div class="ws-progress"><div class="ws-progress-fill" id="ws-progress-fill" style="width:0%"></div></div>
@@ -635,10 +637,12 @@ async function loadPayments() {
 async function loadWalletStatus() {
   try {
     const data = await apiCall('/api/wallet/status');
-    document.getElementById('ws-target').textContent    = data.target?.toLocaleString()       || '—';
-    document.getElementById('ws-approved').textContent  = data.totalApproved?.toLocaleString() || '0';
-    document.getElementById('ws-remaining').textContent = data.remaining?.toLocaleString()     || '0';
-    const pct = data.target ? Math.min(100, Math.round((data.totalApproved / data.target) * 100)) : 0;
+    document.getElementById('ws-target').textContent        = data.target?.toLocaleString()           || '—';
+    document.getElementById('ws-approved').textContent      = data.totalApproved?.toLocaleString()     || '0';
+    document.getElementById('ws-ride-earnings').textContent = data.todayRideEarnings?.toLocaleString() || '0';
+    document.getElementById('ws-remaining').textContent     = data.remaining?.toLocaleString()         || '0';
+    const covered = (data.totalApproved || 0) + (data.todayRideEarnings || 0);
+    const pct = data.target ? Math.min(100, Math.round((covered / data.target) * 100)) : 0;
     document.getElementById('ws-progress-fill').style.width = pct + '%';
 
     // If today's payment already submitted, hide/disable the form

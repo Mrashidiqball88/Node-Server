@@ -502,12 +502,31 @@ app.get('/api/wallet/status', authMiddleware, async (req, res) => {
       { $group: { _id: null, totalApproved: { $sum: '$amount' } } }
     ]);
     const totalApproved = result[0]?.totalApproved || 0;
-    const remaining     = Math.max(0, target - totalApproved);
+
+    // Today's ride earnings: sum of 'Ride earnings' wallet credits for the current UTC day
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setUTCHours(23, 59, 59, 999);
+
+    const wallet = await Wallet.findOne({ user: req.user.id });
+    const todayRideEarnings = wallet
+      ? wallet.transactions
+          .filter(t =>
+            t.type === 'credit' &&
+            t.description === 'Ride earnings' &&
+            t.createdAt >= todayStart &&
+            t.createdAt <= todayEnd
+          )
+          .reduce((sum, t) => sum + t.amount, 0)
+      : 0;
+
+    const remaining = Math.max(0, target - totalApproved - todayRideEarnings);
 
     // Today's submission (if any)
     const todayPayment = await Payment.findOne({ driver: req.user.id, submittedDate: todayUTC() });
 
-    res.json({ category, target, totalApproved, remaining, todayPayment: todayPayment || null });
+    res.json({ category, target, totalApproved, todayRideEarnings, remaining, todayPayment: todayPayment || null });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
