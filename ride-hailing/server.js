@@ -709,7 +709,7 @@ async function start() {
     }
   }
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);
     console.log(`   Customer App : /customer`);
     console.log(`   Driver App   : /driver`);
