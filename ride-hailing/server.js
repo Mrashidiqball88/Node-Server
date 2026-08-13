@@ -58,6 +58,7 @@ const userSchema = new mongoose.Schema({
   role:    { type: String, enum: ['customer', 'driver'], default: 'customer' },
   vehicleType: { type: String, enum: ['Bike', 'Rickshaw', 'Car Mini', 'Car AC', ''], default: '' },
   isOnline: { type: Boolean, default: false },
+  isAdmin:  { type: Boolean, default: false },
   currentLocation: {
     lat: { type: Number, default: 0 },
     lng: { type: Number, default: 0 }
@@ -113,10 +114,24 @@ const sosSchema = new mongoose.Schema({
   resolved: { type: Boolean, default: false }
 }, { timestamps: true });
 
-const User   = mongoose.model('User',   userSchema);
-const Ride   = mongoose.model('Ride',   rideSchema);
-const Wallet = mongoose.model('Wallet', walletSchema);
-const SOS    = mongoose.model('SOS',    sosSchema);
+const paymentSchema = new mongoose.Schema({
+  driver:          { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  trxId:           { type: String, required: true, trim: true },
+  amount:          { type: Number, required: true },
+  vehicleCategory: { type: String, required: true },
+  status:          { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  adminNote:       { type: String, default: '' },
+  submittedDate:   { type: String, required: true }   // 'YYYY-MM-DD' UTC date, for uniqueness check
+}, { timestamps: true });
+
+// One TRX submission per driver per calendar day
+paymentSchema.index({ driver: 1, submittedDate: 1 }, { unique: true });
+
+const User    = mongoose.model('User',    userSchema);
+const Ride    = mongoose.model('Ride',    rideSchema);
+const Wallet  = mongoose.model('Wallet',  walletSchema);
+const SOS     = mongoose.model('SOS',     sosSchema);
+const Payment = mongoose.model('Payment', paymentSchema);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth Middleware
@@ -132,6 +147,23 @@ function authMiddleware(req, res, next) {
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin Middleware
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function adminMiddleware(req, res, next) {
+  // authMiddleware must run first to populate req.user
+  try {
+    const user = await User.findById(req.user.id).select('isAdmin');
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 }
 
@@ -384,6 +416,144 @@ app.post('/api/wallet/add-funds', authMiddleware, async (req, res) => {
       { new: true, upsert: true }
     );
     res.json(wallet);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payment Routes (Driver Wallet / TRX submission)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Daily earnings targets per vehicle category (PKR)
+const DAILY_TARGETS = { 'Bike': 2500, 'Rickshaw': 4000, 'Car Mini': 5500, 'Car AC': 6500 };
+
+// Helper: today's date string in UTC (YYYY-MM-DD)
+function todayUTC() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// POST /api/payments/submit — driver submits daily TRX ID
+app.post('/api/payments/submit', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'driver') {
+      return res.status(403).json({ error: 'Only drivers can submit payments' });
+    }
+    const { trxId, amount } = req.body;
+    if (!trxId || !trxId.trim()) {
+      return res.status(400).json({ error: 'TRX ID is required' });
+    }
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'A valid amount is required' });
+    }
+
+    const driver = await User.findById(req.user.id).select('vehicleType');
+    if (!driver) return res.status(404).json({ error: 'Driver not found' });
+
+    const dateStr = todayUTC();
+    // Uniqueness: one submission per driver per day
+    const existing = await Payment.findOne({ driver: req.user.id, submittedDate: dateStr });
+    if (existing) {
+      return res.status(409).json({ error: 'You have already submitted a payment for today. Wait for admin review before resubmitting.' });
+    }
+
+    const payment = await Payment.create({
+      driver:          req.user.id,
+      trxId:           trxId.trim(),
+      amount:          Number(amount),
+      vehicleCategory: driver.vehicleType || 'Car Mini',
+      submittedDate:   dateStr
+    });
+
+    res.status(201).json(payment);
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ error: 'You have already submitted a payment for today.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/payments/my — driver's own payment history
+app.get('/api/payments/my', authMiddleware, async (req, res) => {
+  try {
+    const payments = await Payment.find({ driver: req.user.id })
+      .sort({ createdAt: -1 })
+      .limit(30);
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/wallet/status — driver's wallet status vs daily target
+app.get('/api/wallet/status', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'driver') {
+      return res.status(403).json({ error: 'Only drivers have a payment wallet status' });
+    }
+    const driver = await User.findById(req.user.id).select('vehicleType');
+    const category = driver?.vehicleType || 'Car Mini';
+    const target   = DAILY_TARGETS[category] || 5500;
+
+    // Sum all approved payments ever
+    const result = await Payment.aggregate([
+      { $match: { driver: new mongoose.Types.ObjectId(req.user.id), status: 'approved' } },
+      { $group: { _id: null, totalApproved: { $sum: '$amount' } } }
+    ]);
+    const totalApproved = result[0]?.totalApproved || 0;
+    const remaining     = Math.max(0, target - totalApproved);
+
+    // Today's submission (if any)
+    const todayPayment = await Payment.findOne({ driver: req.user.id, submittedDate: todayUTC() });
+
+    res.json({ category, target, totalApproved, remaining, todayPayment: todayPayment || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/payments/pending — admin: list pending submissions
+app.get('/api/payments/pending', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const payments = await Payment.find({ status: 'pending' })
+      .populate('driver', 'name phone vehicleType')
+      .sort({ createdAt: 1 });
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/payments/:id/approve — admin
+app.patch('/api/payments/:id/approve', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ error: `Payment is already ${payment.status}` });
+    }
+    payment.status    = 'approved';
+    payment.adminNote = req.body.adminNote || '';
+    await payment.save();
+    res.json(payment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/payments/:id/reject — admin
+app.patch('/api/payments/:id/reject', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    if (payment.status !== 'pending') {
+      return res.status(400).json({ error: `Payment is already ${payment.status}` });
+    }
+    payment.status    = 'rejected';
+    payment.adminNote = req.body.adminNote || '';
+    await payment.save();
+    res.json(payment);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

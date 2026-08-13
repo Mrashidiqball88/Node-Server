@@ -100,6 +100,51 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .stat-val{font-size:1rem;font-weight:700;color:#f5c518}
 .stat-label{font-size:.65rem;color:#555;margin-top:.15rem}
 
+/* ── Bottom Tabs ── */
+.bottom-tabs{display:flex;background:#0a0a0f;border-top:1px solid #1a1a2a;border-bottom:1px solid #1a1a2a;flex-shrink:0}
+.bottom-tab{flex:1;padding:.55rem;border:none;background:transparent;color:#555;font-size:.75rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.1rem;transition:color .2s}
+.bottom-tab.active{color:#f5c518;border-bottom:2px solid #f5c518}
+.bottom-tab-icon{font-size:1rem}
+
+/* ── Payments Panel ── */
+#payments-panel{display:none;background:#0d1117;flex:1;overflow-y:auto;padding:1rem;flex-shrink:0;max-height:45vh}
+.wallet-status-card{background:linear-gradient(135deg,#0d1f0d,#0a0a0f);border:1px solid #2d5a2d;border-radius:14px;padding:1rem;margin-bottom:1rem}
+.ws-title{font-size:.75rem;color:#666;margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.05em}
+.ws-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.5rem}
+.ws-item{text-align:center;background:#0a0a0f;border-radius:8px;padding:.5rem}
+.ws-val{font-size:.95rem;font-weight:700}
+.ws-val.target{color:#f5c518}
+.ws-val.approved{color:#4caf50}
+.ws-val.remaining{color:#ff9933}
+.ws-lbl{font-size:.6rem;color:#555;margin-top:.15rem}
+.ws-progress{height:6px;background:#1a1a2a;border-radius:3px;margin-top:.6rem;overflow:hidden}
+.ws-progress-fill{height:100%;background:linear-gradient(90deg,#4caf50,#66cc44);border-radius:3px;transition:width .4s}
+
+.trx-form{background:#0a0a0f;border:1px solid #222;border-radius:12px;padding:.85rem;margin-bottom:1rem}
+.trx-form-title{font-size:.8rem;color:#888;margin-bottom:.75rem;font-weight:600}
+.trx-inputs{display:flex;flex-direction:column;gap:.6rem}
+.trx-input{width:100%;background:#13131a;border:1px solid #333;border-radius:8px;padding:.65rem .85rem;color:#fff;font-size:.9rem;outline:none;transition:border-color .2s}
+.trx-input:focus{border-color:#f5c518}
+.trx-input::placeholder{color:#444}
+.btn-submit-trx{width:100%;background:#1e3a5f;color:#fff;border:none;border-radius:10px;padding:.75rem;font-size:.9rem;font-weight:700;cursor:pointer;margin-top:.5rem;transition:background .2s}
+.btn-submit-trx:hover{background:#2a4f7f}
+.btn-submit-trx:disabled{opacity:.5;cursor:not-allowed}
+
+.pay-history-title{font-size:.75rem;color:#666;margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.05em}
+.pay-item{background:#0a0a0f;border-radius:10px;padding:.7rem .85rem;margin-bottom:.5rem;border-left:3px solid #333}
+.pay-item.pending{border-left-color:#f5c518}
+.pay-item.approved{border-left-color:#4caf50}
+.pay-item.rejected{border-left-color:#ff5555}
+.pay-item-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem}
+.pay-trx{font-size:.85rem;color:#ccc;font-family:monospace}
+.pay-amount{font-size:.9rem;font-weight:700;color:#f5c518}
+.pay-meta{font-size:.7rem;color:#555}
+.pay-status-pill{font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:100px;text-transform:uppercase}
+.pay-status-pill.pending{background:#2a2a1a;color:#f5c518}
+.pay-status-pill.approved{background:#1a3a1a;color:#4caf50}
+.pay-status-pill.rejected{background:#3a1a1a;color:#ff5555}
+.pay-note{font-size:.7rem;color:#888;margin-top:.25rem;font-style:italic}
+
 /* ── Toast ── */
 .toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#222;border-radius:10px;padding:.6rem 1.2rem;font-size:.85rem;z-index:9999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap}
 .toast.show{opacity:1}
@@ -182,6 +227,16 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
     <div class="stat-item"><div class="stat-val" id="stat-rating">5.0 ⭐</div><div class="stat-label">Rating</div></div>
   </div>
 
+  <!-- Bottom Tabs -->
+  <div class="bottom-tabs">
+    <button class="bottom-tab active" id="tab-home-btn" onclick="switchBottomTab('home')">
+      <span class="bottom-tab-icon">🏠</span>Home
+    </button>
+    <button class="bottom-tab" id="tab-payments-btn" onclick="switchBottomTab('payments')">
+      <span class="bottom-tab-icon">💳</span>Payments
+    </button>
+  </div>
+
   <!-- Info Panel (idle) -->
   <div id="info-panel">
     <div class="idle-msg" id="idle-msg">
@@ -202,6 +257,35 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <div class="ap-route-row">🎯 <span id="ap-dropoff">—</span></div>
     </div>
     <div class="ap-status-btns" id="ap-btns"></div>
+  </div>
+
+  <!-- Payments Panel -->
+  <div id="payments-panel">
+    <!-- Wallet Status -->
+    <div class="wallet-status-card" id="wallet-status-card">
+      <div class="ws-title">Daily Target Status</div>
+      <div class="ws-grid">
+        <div class="ws-item"><div class="ws-val target" id="ws-target">—</div><div class="ws-lbl">Target (Rs)</div></div>
+        <div class="ws-item"><div class="ws-val approved" id="ws-approved">0</div><div class="ws-lbl">Approved (Rs)</div></div>
+        <div class="ws-item"><div class="ws-val remaining" id="ws-remaining">—</div><div class="ws-lbl">Remaining (Rs)</div></div>
+      </div>
+      <div class="ws-progress"><div class="ws-progress-fill" id="ws-progress-fill" style="width:0%"></div></div>
+    </div>
+
+    <!-- TRX Submission Form -->
+    <div class="trx-form" id="trx-form-section">
+      <div class="trx-form-title">📤 Submit Today's TRX Payment</div>
+      <div class="trx-inputs">
+        <input class="trx-input" id="trx-id-input" type="text" placeholder="TRX Transaction ID (e.g. abc123xyz…)">
+        <input class="trx-input" id="trx-amount-input" type="number" min="1" placeholder="Amount paid (PKR)">
+        <button class="btn-submit-trx" id="submit-trx-btn" onclick="submitTrxPayment()">Submit Payment</button>
+      </div>
+      <div style="font-size:.72rem;color:#555;margin-top:.5rem">One submission allowed per day. Wait for admin approval.</div>
+    </div>
+
+    <!-- Payment History -->
+    <div class="pay-history-title">Payment History</div>
+    <div id="payment-history-list"><div class="idle-msg" style="padding:1rem">Loading…</div></div>
   </div>
 </div>
 
@@ -516,6 +600,112 @@ function endActiveRide() {
   document.getElementById('active-panel').style.display = 'none';
   document.getElementById('info-panel').style.display   = 'block';
   clearRideMap();
+}
+
+// ── Bottom Tab Navigation ──────────────────────────────────────────────────
+function switchBottomTab(tab) {
+  const isHome = tab === 'home';
+  document.getElementById('tab-home-btn').classList.toggle('active', isHome);
+  document.getElementById('tab-payments-btn').classList.toggle('active', !isHome);
+
+  if (isHome) {
+    // Show home panels (info or active ride), hide payments
+    document.getElementById('payments-panel').style.display = 'none';
+    if (activeRide) {
+      document.getElementById('active-panel').style.display = 'block';
+      document.getElementById('info-panel').style.display   = 'none';
+    } else {
+      document.getElementById('info-panel').style.display   = 'block';
+      document.getElementById('active-panel').style.display = 'none';
+    }
+  } else {
+    // Show payments panel, hide home panels
+    document.getElementById('info-panel').style.display    = 'none';
+    document.getElementById('active-panel').style.display  = 'none';
+    document.getElementById('payments-panel').style.display = 'block';
+    loadPayments();
+  }
+}
+
+// ── Payments ───────────────────────────────────────────────────────────────
+async function loadPayments() {
+  await Promise.all([loadWalletStatus(), loadPaymentHistory()]);
+}
+
+async function loadWalletStatus() {
+  try {
+    const data = await apiCall('/api/wallet/status');
+    document.getElementById('ws-target').textContent    = data.target?.toLocaleString()       || '—';
+    document.getElementById('ws-approved').textContent  = data.totalApproved?.toLocaleString() || '0';
+    document.getElementById('ws-remaining').textContent = data.remaining?.toLocaleString()     || '0';
+    const pct = data.target ? Math.min(100, Math.round((data.totalApproved / data.target) * 100)) : 0;
+    document.getElementById('ws-progress-fill').style.width = pct + '%';
+
+    // If today's payment already submitted, hide/disable the form
+    const submitBtn   = document.getElementById('submit-trx-btn');
+    const trxSection  = document.getElementById('trx-form-section');
+    if (data.todayPayment) {
+      const s = data.todayPayment.status;
+      const statusMap = { pending: '⏳ Pending', approved: '✅ Approved', rejected: '❌ Rejected' };
+      trxSection.innerHTML = `<div class="trx-form-title">Today's Submission</div>
+        <div style="font-size:.85rem;color:#ccc;margin:.4rem 0">TRX: <span style="font-family:monospace">${data.todayPayment.trxId}</span></div>
+        <div style="font-size:.85rem;color:#ccc;margin:.4rem 0">Amount: <strong style="color:#f5c518">Rs ${data.todayPayment.amount?.toLocaleString()}</strong></div>
+        <div style="margin:.4rem 0"><span class="pay-status-pill ${s}">${statusMap[s] || s}</span></div>
+        ${data.todayPayment.adminNote ? `<div class="pay-note">Note: ${data.todayPayment.adminNote}</div>` : ''}`;
+    }
+  } catch (e) {
+    console.warn('Wallet status error:', e.message);
+  }
+}
+
+async function loadPaymentHistory() {
+  const el = document.getElementById('payment-history-list');
+  try {
+    const payments = await apiCall('/api/payments/my');
+    if (!payments.length) {
+      el.innerHTML = '<div class="idle-msg" style="padding:1rem;color:#555">No payment submissions yet</div>';
+      return;
+    }
+    const statusMap = { pending: '⏳ Pending', approved: '✅ Approved', rejected: '❌ Rejected' };
+    el.innerHTML = payments.map(p => {
+      const date = new Date(p.createdAt).toLocaleDateString('en-PK', { day:'numeric', month:'short', year:'numeric' });
+      return `<div class="pay-item ${p.status}">
+        <div class="pay-item-row">
+          <span class="pay-trx">${p.trxId}</span>
+          <span class="pay-amount">Rs ${p.amount?.toLocaleString()}</span>
+        </div>
+        <div class="pay-item-row">
+          <span class="pay-meta">${date} · ${p.vehicleCategory}</span>
+          <span class="pay-status-pill ${p.status}">${statusMap[p.status] || p.status}</span>
+        </div>
+        ${p.adminNote ? `<div class="pay-note">Admin: ${p.adminNote}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="idle-msg" style="padding:1rem;color:#ff5555">${e.message}</div>`;
+  }
+}
+
+async function submitTrxPayment() {
+  const trxId  = document.getElementById('trx-id-input').value.trim();
+  const amount = document.getElementById('trx-amount-input').value;
+  if (!trxId)  return showToast('Enter a TRX ID', 'error');
+  if (!amount || Number(amount) <= 0) return showToast('Enter a valid amount', 'error');
+
+  const btn = document.getElementById('submit-trx-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+  try {
+    await apiCall('/api/payments/submit', 'POST', { trxId, amount: Number(amount) });
+    showToast('Payment submitted! Awaiting admin approval.', 'success');
+    document.getElementById('trx-id-input').value    = '';
+    document.getElementById('trx-amount-input').value = '';
+    await loadPayments();
+  } catch (e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Submit Payment';
+  }
 }
 
 // ── Stats ──────────────────────────────────────────────────────────────────
