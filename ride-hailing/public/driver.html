@@ -30,7 +30,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
 /* ── App Layout ── */
 #app{display:none;flex-direction:column;height:100dvh}
-#map{flex:1;z-index:1}
+#map{flex:1;z-index:1;width:100%;min-height:0}
 
 /* ── Header ── */
 .header{background:#0d1117;border-bottom:1px solid #1e3a5f;padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;z-index:10;flex-shrink:0}
@@ -588,10 +588,20 @@ function bootApp() {
 // ── Map ────────────────────────────────────────────────────────────────────
 function initMap() {
   if (map) return;
-  map = L.map('map', { zoomControl: false }).setView([31.5204, 74.3587], 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+  map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([31.5204, 74.3587], 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxNativeZoom: 19,
+    maxZoom      : 20,
+    subdomains   : 'abc',
+    detectRetina : true,
+    crossOrigin  : true
+  }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
-  setTimeout(() => map?.invalidateSize(), 300);
+
+  // Guarantee tiles fill the container on first paint and on any resize
+  setTimeout(() => map.invalidateSize(), 200);
+  window.addEventListener('resize', () => map.invalidateSize());
 
   // Watch driver's own location
   if (navigator.geolocation) {
@@ -957,6 +967,8 @@ function switchBottomTab(tab) {
     document.getElementById('payments-panel').style.display = 'block';
     loadPayments();
   }
+  // Repaint map tiles after panel layout shift
+  setTimeout(() => map?.invalidateSize(), 50);
 }
 
 // ── Payments ───────────────────────────────────────────────────────────────

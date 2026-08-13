@@ -31,7 +31,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
 /* ── App Layout ── */
 #app{display:none;flex-direction:column;height:100dvh}
-#map{flex:1;z-index:1}
+#map{flex:1;z-index:1;width:100%;min-height:0}
 
 /* ── Header ── */
 .header{background:#13131a;border-bottom:1px solid #222;padding:.75rem 1rem;display:flex;align-items:center;justify-content:space-between;z-index:10;flex-shrink:0}
@@ -632,6 +632,14 @@ const API = '';
 const FARE_RATES = { 'Bike': 30, 'Rickshaw': 40, 'Car Mini': 50, 'Car AC': 70 };
 const MIN_FARES  = { 'Bike': 50, 'Rickshaw': 70, 'Car Mini': 100, 'Car AC': 150 };
 const TILE_URL   = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_OPTS  = {
+  attribution : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxNativeZoom: 19,
+  maxZoom      : 20,
+  subdomains   : 'abc',
+  detectRetina : true,
+  crossOrigin  : true
+};
 
 // ── State ─────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('rh_token');
@@ -836,9 +844,14 @@ function bootApp() {
 // ── Map ───────────────────────────────────────────────────────────────────
 function initMap() {
   if (map) return;
-  map = L.map('map', { zoomControl: false }).setView([31.5204, 74.3587], 13);
-  L.tileLayer(TILE_URL, { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+  map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([31.5204, 74.3587], 15);
+  L.tileLayer(TILE_URL, TILE_OPTS).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
+
+  // Guarantee tiles fill the container on first paint and on any resize
+  setTimeout(() => map.invalidateSize(), 200);
+  window.addEventListener('resize', () => map.invalidateSize());
+
   map.on('click', (e) => {
     const { lat, lng } = e.latlng;
     if (mapMode === 'pickup') setPickup(lat, lng);
@@ -847,7 +860,7 @@ function initMap() {
   });
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(pos => {
-      map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+      map.setView([pos.coords.latitude, pos.coords.longitude], 16);
     }, () => {});
   }
 }
@@ -1541,6 +1554,8 @@ function switchAppTab(name) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'rides') loadRideHistory();
+  // Repaint map tiles whenever the bottom panel resizes
+  setTimeout(() => map?.invalidateSize(), 50);
 }
 
 
