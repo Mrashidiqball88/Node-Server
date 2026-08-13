@@ -592,10 +592,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', db: dbConnected ? 'connected' : 'testing-mode', ts: new Date().toISOString() });
 });
 
-// Page routes
+// Page routes — '/' opens the customer app directly
 app.get('/customer', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
 app.get('/driver',   (_req, res) => res.sendFile(path.join(__dirname, 'public', 'driver.html')));
-app.get('/',         (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/',         (_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
+
+// Catch-all: serve customer app for any unmatched GET (prevents Cloud Run 404 on deep links)
+app.use((_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Socket.io — Real-time Layer
