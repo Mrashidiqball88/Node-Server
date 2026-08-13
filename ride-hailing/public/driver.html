@@ -308,10 +308,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
     <span class="rr-title">🚗 New Ride Request</span>
     <span class="rr-timer" id="rr-timer">30s</span>
   </div>
-  <div class="rr-route">
+  <div class="rr-route" id="rr-route">
     <div class="rr-point"><span class="rr-point-icon">📍</span><span class="rr-point-text" id="rr-pickup">—</span></div>
-    <div class="rr-divider"></div>
-    <div class="rr-point"><span class="rr-point-icon">🎯</span><span class="rr-point-text" id="rr-dropoff">—</span></div>
+    <!-- stop rows injected dynamically by showRideRequest -->
+    <div id="rr-stops-container"></div>
   </div>
   <div class="rr-meta">
     <div class="rr-meta-item" style="background:#1a1a0a;border:1px solid #2a2a10"><div class="rr-meta-label">Customer's Offer</div><div class="rr-meta-val" id="rr-fare" style="color:#f5c518">—</div></div>
@@ -468,11 +468,26 @@ function showRideOnMap(ride) {
   if (dropoffMarker) dropoffMarker.remove();
   if (routeLine)     routeLine.remove();
 
-  const { pickupLocation: p, dropoffLocation: d } = ride;
-  pickupMarker  = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pickup-icon', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(map);
-  dropoffMarker = L.marker([d.lat, d.lng], { icon: L.divIcon({ className: 'dropoff-icon', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(map);
-  routeLine = L.polyline([[p.lat, p.lng], [d.lat, d.lng]], { color: '#f5c518', weight: 3, dashArray: '8,8' }).addTo(map);
-  map.fitBounds([[p.lat, p.lng], [d.lat, d.lng]], { padding: [60, 60] });
+  const p = ride.pickupLocation;
+  pickupMarker = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pickup-icon', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(map);
+
+  // Build waypoint list: pickup + all stops
+  const stops = (ride.dropoffLocations && ride.dropoffLocations.length)
+    ? ride.dropoffLocations
+    : (ride.dropoffLocation ? [ride.dropoffLocation] : []);
+
+  const allPts = [p, ...stops];
+  const latLngs = allPts.map(pt => [pt.lat, pt.lng]);
+
+  // Mark each stop
+  stops.forEach((s, i) => {
+    const cls = i === 0 ? 'dropoff-icon' : 'dropoff-icon';
+    const m = L.marker([s.lat, s.lng], { icon: L.divIcon({ className: cls, iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(map);
+    if (i === 0) dropoffMarker = m;
+  });
+
+  routeLine = L.polyline(latLngs, { color: '#f5c518', weight: 3, dashArray: '8,8' }).addTo(map);
+  if (latLngs.length >= 2) map.fitBounds(L.latLngBounds(latLngs), { padding: [60, 60] });
 }
 
 function clearRideMap() {
@@ -570,9 +585,34 @@ function connectSocket() {
 const PAY_ICONS = { cash: '💵', easypaisa: '📱', jazzcash: '🎵', wallet: '💰' };
 const PAY_NAMES = { cash: 'Cash on delivery', easypaisa: 'EasyPaisa', jazzcash: 'JazzCash', wallet: 'Wallet' };
 
+function formatStopAddr(loc) {
+  return loc?.address || (loc ? `${loc.lat?.toFixed(4)}, ${loc.lng?.toFixed(4)}` : '—');
+}
+
 function showRideRequest(ride) {
-  document.getElementById('rr-pickup').textContent  = ride.pickupLocation?.address  || `${ride.pickupLocation?.lat?.toFixed(4)}, ${ride.pickupLocation?.lng?.toFixed(4)}`;
-  document.getElementById('rr-dropoff').textContent = ride.dropoffLocation?.address || `${ride.dropoffLocation?.lat?.toFixed(4)}, ${ride.dropoffLocation?.lng?.toFixed(4)}`;
+  document.getElementById('rr-pickup').textContent = formatStopAddr(ride.pickupLocation);
+
+  // Build stop rows (multi-stop aware)
+  const stops = (ride.dropoffLocations && ride.dropoffLocations.length)
+    ? ride.dropoffLocations
+    : (ride.dropoffLocation ? [ride.dropoffLocation] : []);
+
+  const stopIcons = ['🎯', '📌', '📌', '📌'];
+  const stopLabels = stops.length > 1
+    ? stops.map((_, i) => `Drop ${i + 1}`)
+    : ['Dropoff'];
+
+  document.getElementById('rr-stops-container').innerHTML = stops.map((s, i) => `
+    <div class="rr-divider"></div>
+    <div class="rr-point">
+      <span class="rr-point-icon">${stopIcons[i] || '📌'}</span>
+      <span class="rr-point-text">
+        ${stops.length > 1 ? `<span style="font-size:.65rem;color:#666;display:block;margin-bottom:.05rem">${stopLabels[i]}</span>` : ''}
+        ${formatStopAddr(s)}
+      </span>
+    </div>
+  `).join('');
+
   document.getElementById('rr-fare').textContent    = `Rs ${(ride.fare || 0).toLocaleString()}`;
   document.getElementById('rr-dist').textContent    = ride.distance ? `${ride.distance.toFixed(1)} km` : '—';
   document.getElementById('rr-vehicle').textContent = ride.vehicleType || '—';

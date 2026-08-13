@@ -84,6 +84,17 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
 .divider-line{display:flex;align-items:center;gap:.5rem;margin:.25rem 0;color:#444;font-size:.7rem}
 .divider-line::before,.divider-line::after{content:'';flex:1;height:1px;background:#222}
+/* ── Multi-stop ── */
+.stop-wrap{margin-bottom:.55rem}
+.stop-wrap .loc-wrap{margin-bottom:0}
+.stop-header{display:flex;align-items:center;gap:.35rem;margin-bottom:.3rem}
+.stop-num-badge{width:17px;height:17px;border-radius:50%;background:#f5c51820;border:1px solid #f5c51855;color:#f5c518;font-size:.6rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.stop-lbl-text{font-size:.68rem;color:#666;font-weight:600;letter-spacing:.02em}
+.btn-rm-stop{margin-left:auto;background:none;border:1px solid #2a1a1a;color:#664444;border-radius:6px;padding:.1rem .38rem;font-size:.65rem;cursor:pointer;transition:all .15s;line-height:1.4}
+.btn-rm-stop:hover{border-color:#ff5555;color:#ff5555;background:#1a0505}
+.btn-add-stop{display:flex;align-items:center;justify-content:center;gap:.35rem;width:100%;background:transparent;border:1px dashed #2c2c2c;border-radius:10px;color:#555;font-size:.78rem;padding:.5rem .75rem;cursor:pointer;transition:all .2s;margin:.25rem 0 .6rem}
+.btn-add-stop:hover{border-color:#f5c518;color:#f5c518;background:#0f0f08}
+.multi-route-badge{display:inline-flex;align-items:center;gap:.3rem;background:#1a1a0a;border:1px solid #2a2a10;border-radius:6px;padding:.18rem .5rem;font-size:.68rem;color:#a0a060;margin-top:.1rem}
 
 /* ── Vehicle grid ── */
 .vehicle-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin:.75rem 0}
@@ -344,17 +355,87 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
       <div class="divider-line">↕</div>
 
-      <!-- Dropoff -->
-      <div class="loc-wrap" id="dropoff-wrap">
-        <span class="pin-indicator">🎯</span>
-        <input class="location-input" id="dropoff-input"
-               placeholder="Search dropoff (e.g. DHA Phase 5)"
-               autocomplete="off" spellcheck="false"
-               oninput="onLocInput('dropoff')"
-               onfocus="onLocFocus('dropoff')"
-               onblur="onLocBlur('dropoff')">
-        <div class="location-dropdown" id="dropoff-dropdown"></div>
-      </div>
+      <!-- ── Multi-stop Dropoffs ── -->
+      <div id="stops-container">
+
+        <!-- Stop 0: Drop 1 — always visible, no remove btn -->
+        <div class="stop-wrap" id="stop-wrap-0">
+          <div class="stop-header">
+            <span class="stop-num-badge">1</span>
+            <span class="stop-lbl-text">Drop 1 — Main Dropoff</span>
+          </div>
+          <div class="loc-wrap" style="margin-bottom:0">
+            <span class="pin-indicator">🎯</span>
+            <input class="location-input" id="stop-0-input"
+                   placeholder="Search Drop 1 (e.g. DHA Phase 5)"
+                   autocomplete="off" spellcheck="false"
+                   oninput="onLocInput('stop-0')"
+                   onfocus="onLocFocus('stop-0')"
+                   onblur="onLocBlur('stop-0')">
+            <div class="location-dropdown" id="stop-0-dropdown"></div>
+          </div>
+        </div>
+
+        <!-- Stop 1: Drop 2 — hidden initially -->
+        <div class="stop-wrap" id="stop-wrap-1" style="display:none">
+          <div class="stop-header">
+            <span class="stop-num-badge">2</span>
+            <span class="stop-lbl-text">Drop 2</span>
+            <button class="btn-rm-stop" onclick="removeStop(1)">✕</button>
+          </div>
+          <div class="loc-wrap" style="margin-bottom:0">
+            <span class="pin-indicator">📌</span>
+            <input class="location-input" id="stop-1-input"
+                   placeholder="Search Drop 2 (optional)"
+                   autocomplete="off" spellcheck="false"
+                   oninput="onLocInput('stop-1')"
+                   onfocus="onLocFocus('stop-1')"
+                   onblur="onLocBlur('stop-1')">
+            <div class="location-dropdown" id="stop-1-dropdown"></div>
+          </div>
+        </div>
+
+        <!-- Stop 2: Drop 3 — hidden initially -->
+        <div class="stop-wrap" id="stop-wrap-2" style="display:none">
+          <div class="stop-header">
+            <span class="stop-num-badge">3</span>
+            <span class="stop-lbl-text">Drop 3</span>
+            <button class="btn-rm-stop" onclick="removeStop(2)">✕</button>
+          </div>
+          <div class="loc-wrap" style="margin-bottom:0">
+            <span class="pin-indicator">📌</span>
+            <input class="location-input" id="stop-2-input"
+                   placeholder="Search Drop 3 (optional)"
+                   autocomplete="off" spellcheck="false"
+                   oninput="onLocInput('stop-2')"
+                   onfocus="onLocFocus('stop-2')"
+                   onblur="onLocBlur('stop-2')">
+            <div class="location-dropdown" id="stop-2-dropdown"></div>
+          </div>
+        </div>
+
+        <!-- Stop 3: Drop 4 — hidden initially -->
+        <div class="stop-wrap" id="stop-wrap-3" style="display:none">
+          <div class="stop-header">
+            <span class="stop-num-badge">4</span>
+            <span class="stop-lbl-text">Drop 4</span>
+            <button class="btn-rm-stop" onclick="removeStop(3)">✕</button>
+          </div>
+          <div class="loc-wrap" style="margin-bottom:0">
+            <span class="pin-indicator">📌</span>
+            <input class="location-input" id="stop-3-input"
+                   placeholder="Search Drop 4 (optional)"
+                   autocomplete="off" spellcheck="false"
+                   oninput="onLocInput('stop-3')"
+                   onfocus="onLocFocus('stop-3')"
+                   onblur="onLocBlur('stop-3')">
+            <div class="location-dropdown" id="stop-3-dropdown"></div>
+          </div>
+        </div>
+
+      </div><!-- /stops-container -->
+
+      <button class="btn-add-stop" id="add-stop-btn" onclick="addStop()">＋ Add Stop</button>
 
       <!-- Vehicle type -->
       <div class="vehicle-grid">
@@ -516,20 +597,22 @@ const TILE_URL   = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 // ── State ─────────────────────────────────────────────────────────────────
 let token = localStorage.getItem('rh_token');
 let user  = JSON.parse(localStorage.getItem('rh_user') || 'null');
-let map, pickupMarker, dropoffMarker, routeLine, driverMarker;
-let pickup = null, dropoff = null;
+let map, pickupMarker, routeLine, driverMarker;
+let stopMarkers = [null, null, null, null]; // markers for each drop stop
+let pickup  = null;
+let dropoffs = [null, null, null, null];    // up to 4 stops; dropoffs[0] = main/first
+let activeStops = 1;                        // how many stop rows are visible (1-4)
 let mapMode = 'pickup';
 let selectedVehicle = 'Bike';
 let routeDistanceKm = null;
-let offeredFare = 0;                   // customer's negotiated fare
+let offeredFare = 0;
 let activeRide = null;
 let socket = null;
 let locationWatchId = null;
-let driverOffers = [];          // live list of driver offers/counters
-let activeLiveFare = 0;         // fare being shown in waiting panel
-let activeDriverInfo = null;    // driver object after customer selects one
-// Autocomplete debounce timers
-let locTimer = { pickup: null, dropoff: null };
+let driverOffers = [];
+let activeLiveFare = 0;
+let activeDriverInfo = null;
+let locTimer = {};                          // keyed by type string e.g. 'pickup','stop-0'
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -719,8 +802,9 @@ function initMap() {
   L.control.zoom({ position: 'topright' }).addTo(map);
   map.on('click', (e) => {
     const { lat, lng } = e.latlng;
-    if (mapMode === 'pickup')  setPickup(lat, lng);
-    else if (mapMode === 'dropoff') setDropoff(lat, lng);
+    if (mapMode === 'pickup') setPickup(lat, lng);
+    else if (mapMode === 'stop-0') setStop(0, lat, lng);
+    // additional stops require search — map-tap only works for pickup & first drop
   });
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(pos => {
@@ -794,15 +878,19 @@ function renderDropdown(type, results) {
 let _pickingGuard = false;
 
 function pickFromSearch(e, type, lat, lng, display) {
-  if (_pickingGuard) return;          // already handled by the earlier event
+  if (_pickingGuard) return;
   _pickingGuard = true;
   setTimeout(() => { _pickingGuard = false; }, 600);
 
-  e.preventDefault();                 // keep focus in input (desktop blur guard)
+  e.preventDefault();
   e.stopPropagation();
   closeDropdown(type);
-  if (type === 'pickup')  setPickup(+lat, +lng, display);
-  else                    setDropoff(+lat, +lng, display);
+  if (type === 'pickup') {
+    setPickup(+lat, +lng, display);
+  } else if (type.startsWith('stop-')) {
+    const idx = parseInt(type.split('-')[1], 10);
+    setStop(idx, +lat, +lng, display);
+  }
 }
 
 function closeDropdown(type) {
@@ -844,68 +932,84 @@ async function setPickup(lat, lng, preDisplay = null) {
   pickup.address = addr;
   document.getElementById('pickup-input').value = addr;
 
-  mapMode = 'dropoff';
+  mapMode = 'stop-0';
   const hint = document.getElementById('map-hint');
-  hint.textContent = 'Now search or tap your dropoff location';
+  hint.textContent = 'Now search or tap your Drop 1 location';
   hint.className = 'map-hint dropoff-mode';
   hint.style.display = 'block';
 
-  if (dropoff) {
-    // Both points set — draw route; fitBounds will pan the map
+  if (dropoffs[0]) {
     const distKm = await drawRoute();
     routeDistanceKm = distKm;
     updateFare();
   } else {
-    // Only pickup set — pan to show the new marker
     map.setView([lat, lng], 14);
   }
 }
 
-async function setDropoff(lat, lng, preDisplay = null) {
-  dropoff = { lat, lng };
-  if (dropoffMarker) dropoffMarker.remove();
-  dropoffMarker = L.marker([lat, lng], { icon: createCircleIcon('dropoff-marker') }).addTo(map);
-  closeDropdown('dropoff');
-  document.getElementById('dropoff-input').value = preDisplay || 'Locating…';
-  document.getElementById('dropoff-input').classList.add('has-val');
+// ── Set a specific stop by index (0=Drop1, 1=Drop2, …) ────────────────────
+async function setStop(idx, lat, lng, preDisplay = null) {
+  dropoffs[idx] = { lat, lng };
+  if (stopMarkers[idx]) stopMarkers[idx].remove();
+  stopMarkers[idx] = L.marker([lat, lng], {
+    icon: createCircleIcon(idx === 0 ? 'dropoff-marker' : 'dropoff-marker stop-extra-marker')
+  }).addTo(map);
+  closeDropdown(`stop-${idx}`);
+  document.getElementById(`stop-${idx}-input`).value = preDisplay || 'Locating…';
+  document.getElementById(`stop-${idx}-input`).classList.add('has-val');
   const addr = preDisplay || await reverseGeocode(lat, lng);
-  dropoff.address = addr;
-  document.getElementById('dropoff-input').value = addr;
+  dropoffs[idx].address = addr;
+  document.getElementById(`stop-${idx}-input`).value = addr;
 
   mapMode = 'idle';
   document.getElementById('map-hint').style.display = 'none';
 
   if (pickup) {
-    // Both points set — draw route; fitBounds will pan/zoom to show both markers
     const distKm = await drawRoute();
     routeDistanceKm = distKm;
     updateFare();
   } else {
-    // Only dropoff set — pan to show the new marker
     map.setView([lat, lng], 14);
   }
 }
 
 async function drawRoute() {
-  if (routeLine) { if (Array.isArray(routeLine)) routeLine.forEach(l => l.remove()); else routeLine.remove(); }
+  if (routeLine) { if (Array.isArray(routeLine)) routeLine.forEach(l => l.remove()); else routeLine.remove(); routeLine = null; }
+
+  // Build ordered waypoints: pickup + all non-null stops (in order)
+  const activeDropoffs = dropoffs.slice(0, activeStops).filter(d => d !== null);
+  if (!pickup || !activeDropoffs.length) return 0;
+  const waypoints = [pickup, ...activeDropoffs];
+
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}?overview=full&geometries=geojson`;
+    // OSRM supports multiple waypoints as semicolon-separated lng,lat pairs
+    const coordStr = waypoints.map(p => `${p.lng},${p.lat}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
     const r = await fetch(url);
     const d = await r.json();
     if (d.routes && d.routes[0]) {
       const coords = d.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-      // Draw shadow + highlighted line for visual depth
       const shadow = L.polyline(coords, { color: '#000', weight: 8, opacity: .35 }).addTo(map);
       const line   = L.polyline(coords, { color: '#f5c518', weight: 5, opacity: 1 }).addTo(map);
+      // Draw stop waypoint markers over the route line
       routeLine = [shadow, line];
       map.fitBounds(line.getBounds(), { padding: [50, 50] });
-      return d.routes[0].distance / 1000;
+      // Sum all leg distances for the cumulative total
+      const totalKm = d.routes[0].legs.reduce((sum, leg) => sum + leg.distance, 0) / 1000;
+      return totalKm;
     }
   } catch {}
-  // Fallback straight line
-  const line = L.polyline([[pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]], { color: '#f5c518', weight: 5, dashArray: '10,8', opacity: .9 }).addTo(map);
+
+  // Fallback: straight dashed line connecting all waypoints
+  const coords = waypoints.map(p => [p.lat, p.lng]);
+  const line = L.polyline(coords, { color: '#f5c518', weight: 5, dashArray: '10,8', opacity: .9 }).addTo(map);
   routeLine = [line];
-  return haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+  if (coords.length >= 2) map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
+  // Haversine sum across legs
+  let total = 0;
+  for (let i = 0; i < waypoints.length - 1; i++)
+    total += haversine(waypoints[i].lat, waypoints[i].lng, waypoints[i+1].lat, waypoints[i+1].lng);
+  return total;
 }
 
 function haversine(lat1, lng1, lat2, lng2) {
@@ -916,21 +1020,32 @@ function haversine(lat1, lng1, lat2, lng2) {
 
 // ── Fare Negotiation ──────────────────────────────────────────────────────
 function updateFare() {
-  if (!pickup || !dropoff) return;
-  const dist = routeDistanceKm !== null
-    ? routeDistanceKm
-    : haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+  const activeDrop = dropoffs.slice(0, activeStops).find(d => d !== null);
+  if (!pickup || !activeDrop) return;
+
+  let dist;
+  if (routeDistanceKm !== null) {
+    dist = routeDistanceKm;
+  } else {
+    // Haversine fallback: sum all legs
+    const pts = [pickup, ...dropoffs.slice(0, activeStops).filter(d => d)];
+    dist = 0;
+    for (let i = 0; i < pts.length - 1; i++)
+      dist += haversine(pts[i].lat, pts[i].lng, pts[i+1].lat, pts[i+1].lng);
+  }
+
   const rate      = FARE_RATES[selectedVehicle] || 50;
   const min       = MIN_FARES[selectedVehicle] || 100;
   const suggested = Math.max(Math.round(dist * rate), min);
-
-  // Reset offer to suggested whenever vehicle or route changes
   offeredFare = suggested;
 
+  const stopCount = dropoffs.slice(0, activeStops).filter(d => d).length;
+  const distLabel = stopCount > 1 ? `📍 ${dist.toFixed(1)} km total · ${stopCount} stops` : `📍 ${dist.toFixed(1)} km`;
   document.getElementById('fare-meta').textContent = `Rs ${rate}/km`;
   document.getElementById('fare-suggested-val').textContent = `Rs ${suggested.toLocaleString()}`;
   document.getElementById('dist-km-val').textContent = dist.toFixed(1);
   document.getElementById('dist-badge').style.display = 'inline-flex';
+  document.getElementById('dist-badge').title = distLabel;
   renderOfferedFare();
   document.getElementById('fare-row').style.display  = 'block';
   document.getElementById('book-btn').style.display  = 'block';
@@ -953,34 +1068,85 @@ function selectVehicle(btn) {
   document.querySelectorAll('.vehicle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedVehicle = btn.dataset.type;
-  if (pickup && dropoff) updateFare();
+  if (pickup && dropoffs[0]) updateFare();
+}
+
+// ── Add / Remove Stops ───────────────────────────────────────────────────
+function addStop() {
+  if (activeStops >= 4) return showToast('Maximum 4 drop stops', 'info');
+  document.getElementById(`stop-wrap-${activeStops}`).style.display = 'block';
+  activeStops++;
+  document.getElementById('add-stop-btn').style.display = activeStops >= 4 ? 'none' : 'flex';
+}
+
+function removeStop(idx) {
+  // Clear the stop at idx and shift higher stops down to close the gap
+  if (stopMarkers[idx]) { stopMarkers[idx].remove(); stopMarkers[idx] = null; }
+  dropoffs[idx] = null;
+
+  for (let i = idx; i < activeStops - 1; i++) {
+    dropoffs[i]     = dropoffs[i + 1];
+    stopMarkers[i]  = stopMarkers[i + 1];
+    const fromInput = document.getElementById(`stop-${i+1}-input`);
+    const toInput   = document.getElementById(`stop-${i}-input`);
+    toInput.value   = fromInput.value;
+    toInput.classList.toggle('has-val', fromInput.classList.contains('has-val'));
+    fromInput.value = '';
+    fromInput.classList.remove('has-val');
+  }
+  // Wipe the last (now-duplicate) slot
+  dropoffs[activeStops - 1]    = null;
+  stopMarkers[activeStops - 1] = null;
+
+  activeStops--;
+  document.getElementById(`stop-wrap-${activeStops}`).style.display = 'none';
+  document.getElementById('add-stop-btn').style.display = 'flex';
+
+  // Redraw if possible
+  if (pickup && dropoffs[0]) {
+    drawRoute().then(dist => { routeDistanceKm = dist; updateFare(); });
+  } else {
+    routeDistanceKm = null;
+    if (routeLine) { if (Array.isArray(routeLine)) routeLine.forEach(l => l.remove()); else routeLine.remove(); routeLine = null; }
+    document.getElementById('fare-row').style.display = 'none';
+    document.getElementById('book-btn').style.display = 'none';
+  }
 }
 
 // ── Book Ride ─────────────────────────────────────────────────────────────
 async function bookRide() {
-  if (!pickup || !dropoff) return showToast('Set pickup & dropoff first', 'error');
+  if (!pickup)       return showToast('Set pickup location first', 'error');
+  if (!dropoffs[0])  return showToast('Set at least one dropoff location', 'error');
   if (!offeredFare || offeredFare < 1) return showToast('Invalid fare amount', 'error');
 
-  const dist = routeDistanceKm !== null
-    ? routeDistanceKm
-    : haversine(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng);
+  const activeDropoffsList = dropoffs.slice(0, activeStops).filter(d => d !== null);
+
+  const dist = routeDistanceKm !== null ? routeDistanceKm : (() => {
+    const pts = [pickup, ...activeDropoffsList];
+    let total = 0;
+    for (let i = 0; i < pts.length - 1; i++)
+      total += haversine(pts[i].lat, pts[i].lng, pts[i+1].lat, pts[i+1].lng);
+    return total;
+  })();
 
   try {
     const ride = await apiCall('/api/rides', 'POST', {
-      pickupLocation:  { ...pickup },
-      dropoffLocation: { ...dropoff },
-      fare:            offeredFare,
-      offeredFare:     offeredFare,
-      distance:        +dist.toFixed(2),
-      vehicleType:     selectedVehicle,
-      paymentMethod:   'cash'
+      pickupLocation:   { ...pickup },
+      dropoffLocation:  { ...activeDropoffsList[0] },             // primary stop
+      dropoffLocations: activeDropoffsList.map(d => ({ ...d })), // full list
+      fare:             offeredFare,
+      offeredFare:      offeredFare,
+      distance:         +dist.toFixed(2),
+      vehicleType:      selectedVehicle,
+      paymentMethod:    'cash'
     });
     activeRide = ride;
     activeLiveFare = offeredFare;
     driverOffers = [];
     showWaitingPanel(ride);
     connectToRideRoom(ride._id);
-    showToast('Offer broadcast! Waiting for drivers…', 'success');
+    const stopStr = activeDropoffsList.length > 1 ? ` · ${activeDropoffsList.length} stops` : '';
+    showToast(`Offer broadcast${stopStr}! Waiting for drivers…`, 'success');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -1106,14 +1272,26 @@ function endRide() {
   document.getElementById('ar-matched').style.display = 'none';
   document.getElementById('bottom-panel').style.display = 'block';
   if (pickupMarker)  { pickupMarker.remove();  pickupMarker  = null; }
-  if (dropoffMarker) { dropoffMarker.remove(); dropoffMarker = null; }
+  stopMarkers.forEach((m, i) => { if (m) { m.remove(); stopMarkers[i] = null; } });
   if (routeLine)     { (Array.isArray(routeLine) ? routeLine : [routeLine]).forEach(l => l.remove()); routeLine = null; }
   if (driverMarker)  { driverMarker.remove();  driverMarker  = null; }
-  pickup = null; dropoff = null; mapMode = 'pickup';
-  document.getElementById('pickup-input').value  = '';
-  document.getElementById('dropoff-input').value = '';
+  pickup = null;
+  dropoffs = [null, null, null, null];
+  activeStops = 1;
+  mapMode = 'pickup';
+  document.getElementById('pickup-input').value = '';
   document.getElementById('pickup-input').classList.remove('has-val');
-  document.getElementById('dropoff-input').classList.remove('has-val');
+  // Reset all stop inputs
+  [0, 1, 2, 3].forEach(i => {
+    const inp = document.getElementById(`stop-${i}-input`);
+    if (inp) { inp.value = ''; inp.classList.remove('has-val'); }
+  });
+  // Hide extra stops
+  [1, 2, 3].forEach(i => {
+    const wrap = document.getElementById(`stop-wrap-${i}`);
+    if (wrap) wrap.style.display = 'none';
+  });
+  document.getElementById('add-stop-btn').style.display = 'flex';
   document.getElementById('fare-row').style.display = 'none';
   document.getElementById('dist-badge').style.display = 'none';
   document.getElementById('book-btn').style.display = 'none';

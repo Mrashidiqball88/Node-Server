@@ -83,11 +83,16 @@ const rideSchema = new mongoose.Schema({
     lng:     { type: Number, required: true },
     address: { type: String, default: 'Pickup Point' }
   },
-  dropoffLocation: {
-    lat:     { type: Number, required: true },
-    lng:     { type: Number, required: true },
+  dropoffLocation: {                // primary stop (first drop) — kept for driver-app compat
+    lat:     { type: Number, default: 0 },
+    lng:     { type: Number, default: 0 },
     address: { type: String, default: 'Dropoff Point' }
   },
+  dropoffLocations: [{              // full ordered list of all stops
+    lat:     { type: Number, required: true },
+    lng:     { type: Number, required: true },
+    address: { type: String, default: 'Stop' }
+  }],
   fare:        { type: Number, required: true },
   distance:    { type: Number, default: 0 },
   status: {
@@ -333,13 +338,22 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 
 app.post('/api/rides', authMiddleware, async (req, res) => {
   try {
-    const { pickupLocation, dropoffLocation, fare, distance, vehicleType, notes, paymentMethod, mobileAccount } = req.body;
-    if (!pickupLocation || !dropoffLocation || !fare) {
-      return res.status(400).json({ error: 'Pickup, dropoff and fare are required' });
+    const { pickupLocation, dropoffLocation, dropoffLocations, fare, distance, vehicleType, notes, paymentMethod, mobileAccount } = req.body;
+    if (!pickupLocation || !fare) {
+      return res.status(400).json({ error: 'Pickup and fare are required' });
     }
+    // Resolve stops: prefer dropoffLocations array; fall back to single dropoffLocation
+    const stops = Array.isArray(dropoffLocations) && dropoffLocations.length
+      ? dropoffLocations
+      : (dropoffLocation ? [dropoffLocation] : []);
+    if (!stops.length) return res.status(400).json({ error: 'At least one dropoff stop is required' });
+
     const ride = await Ride.create({
-      passenger: req.user.id,
-      pickupLocation, dropoffLocation, fare,
+      passenger:        req.user.id,
+      pickupLocation,
+      dropoffLocation:  stops[0],        // primary stop
+      dropoffLocations: stops,
+      fare,
       distance:      distance      || 0,
       vehicleType:   vehicleType   || 'Car Mini',
       notes:         notes         || '',
@@ -349,15 +363,16 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
 
     // Broadcast to all online drivers
     io.to('drivers-online').emit('ride:new', {
-      id:              ride._id,
-      pickupLocation:  ride.pickupLocation,
-      dropoffLocation: ride.dropoffLocation,
-      fare:            ride.fare,
-      distance:        ride.distance,
-      vehicleType:     ride.vehicleType,
-      paymentMethod:   ride.paymentMethod,
-      notes:           ride.notes,
-      createdAt:       ride.createdAt
+      id:               ride._id,
+      pickupLocation:   ride.pickupLocation,
+      dropoffLocation:  ride.dropoffLocation,
+      dropoffLocations: ride.dropoffLocations,   // full multi-stop list
+      fare:             ride.fare,
+      distance:         ride.distance,
+      vehicleType:      ride.vehicleType,
+      paymentMethod:    ride.paymentMethod,
+      notes:            ride.notes,
+      createdAt:        ride.createdAt
     });
 
     res.status(201).json(ride);
@@ -981,6 +996,21 @@ async function start() {
       await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
       dbConnected = true;
       console.log('✓ MongoDB Atlas connected');
+
+      // ── Migrate email index to sparse (one-time, safe to re-run) ──────────
+      // Old deployments have a non-sparse unique index that blocks null emails.
+      try {
+        const usersCol = mongoose.connection.collection('users');
+        const idxs = await usersCol.indexes();
+        const emailIdx = idxs.find(ix => ix.name === 'email_1');
+        if (emailIdx && !emailIdx.sparse) {
+          await usersCol.dropIndex('email_1');
+          await usersCol.createIndex({ email: 1 }, { unique: true, sparse: true });
+          console.log('✓ Email index migrated to sparse');
+        }
+      } catch (migrateErr) {
+        console.warn('Email index migration skipped:', migrateErr.message);
+      }
     } catch (err) {
       console.warn('⚠  MongoDB unavailable, running in testing mode:', err.message);
     }
