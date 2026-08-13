@@ -1128,10 +1128,10 @@ async function viewDocs(userId, infoJson = null) {
     </div>`;
 
     const docs = [
-      { key: 'cnicFront',       label: 'CNIC Front',     url: d.cnicFront },
-      { key: 'cnicBack',        label: 'CNIC Back',      url: d.cnicBack  },
-      { key: 'licensePhoto',    label: 'Driving License', url: d.licensePhoto },
-      { key: 'vehicleRegPhoto', label: 'Vehicle Reg',    url: d.vehicleRegPhoto }
+      { key: 'profilePhoto',    label: 'Profile Photo',   url: d.profilePhoto },
+      { key: 'cnicFront',       label: 'CNIC Front',      url: d.cnicFront },
+      { key: 'cnicBack',        label: 'CNIC Back',       url: d.cnicBack  },
+      { key: 'licensePhoto',    label: 'Driving License', url: d.licensePhoto }
     ];
     grid.innerHTML = docs.map(doc =>
       doc.url

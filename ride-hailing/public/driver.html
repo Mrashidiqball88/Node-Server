@@ -243,6 +243,29 @@ textarea.support-input{resize:vertical;min-height:85px}
 .support-modal-btns{display:flex;gap:.5rem;margin-top:.4rem}
 .btn-sup-cancel{flex:1;padding:.6rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;background:#1a1a28;color:#888;border:1px solid #333}
 .btn-sup-submit{flex:1;padding:.6rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;background:#f5c518;color:#06060e;border:none}
+/* ── Password eye toggle ── */
+.pw-wrap{position:relative;display:block}
+.pw-wrap input{padding-right:2.8rem!important;width:100%}
+.pw-eye{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#555;cursor:pointer;font-size:1rem;padding:.15rem;display:flex;align-items:center;justify-content:center;line-height:1;transition:color .2s}
+.pw-eye:hover{color:#f5c518}
+/* ── Step indicator ── */
+.step-bar{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:1rem}
+.step-circle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.step-circle.active{background:#1e3a5f;border:2px solid #66aaff;color:#fff}
+.step-circle.done{background:#0a3a1a;border:2px solid #4caf50;color:#4caf50}
+.step-circle.inactive{background:#13131a;border:2px solid #333;color:#555}
+.step-connector{flex:0 0 50px;height:2px;background:#333}
+.step-connector.done{background:#4caf50}
+/* ── Pending Approval Card ── */
+.pending-card{background:#1a1500;border:2px solid #f5c518;border-radius:14px;padding:1.2rem 1rem;margin:.75rem 1rem;text-align:center}
+.pending-card-icon{font-size:2rem;margin-bottom:.4rem}
+.pending-card-title{font-size:.95rem;font-weight:700;color:#f5c518;margin-bottom:.5rem}
+.pending-card-msg{font-size:.78rem;color:#999;line-height:1.55}
+/* ── Forgot Password ── */
+.fp-otp-box{background:#0a0f1a;border:2px solid #f5c518;border-radius:12px;padding:1rem;text-align:center;margin:.75rem 0}
+.fp-otp-code{font-size:2rem;font-weight:800;letter-spacing:.25em;color:#f5c518}
+.fp-otp-note{font-size:.7rem;color:#888;margin-top:.35rem}
+.btn-text-link{background:none;border:none;color:#f5c518;font-size:.8rem;cursor:pointer;text-decoration:underline;margin-top:.4rem;display:inline-block;padding:0}
 </style>
 </head>
 <body>
@@ -257,50 +280,118 @@ textarea.support-input{resize:vertical;min-height:85px}
       <button class="auth-tab" onclick="switchTab('register')">Register</button>
     </div>
 
+    <!-- Sign In -->
     <div id="login-form">
-      <div class="form-group"><label>Email</label><input type="email" id="l-email" placeholder="driver@email.com"></div>
-      <div class="form-group"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••"></div>
+      <div class="form-group"><label>Phone or Email</label><input type="text" id="l-email" placeholder="03001234567 or email" inputmode="tel" autocomplete="username"></div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password">
+          <button type="button" class="pw-eye" onclick="togglePw('l-pass')" tabindex="-1">👁</button>
+        </div>
+      </div>
       <button class="btn-primary" onclick="doLogin()">Sign In</button>
+      <div style="text-align:center;margin-top:.6rem">
+        <button class="btn-text-link" onclick="switchTab('forgot')">Forgot Password?</button>
+      </div>
     </div>
 
+    <!-- Register — 2-step -->
     <div id="register-form" style="display:none">
-      <div class="form-group"><label>Full Name</label><input type="text" id="r-name" placeholder="Driver name"></div>
-      <div class="form-group"><label>Email</label><input type="email" id="r-email" placeholder="driver@email.com"></div>
-      <div class="form-group"><label>Phone</label><input type="tel" id="r-phone" placeholder="+92 300 0000000"></div>
-      <div class="form-group">
-        <label>Vehicle Type</label>
-        <select id="r-vehicle">
-          <option value="Bike">🛵 Bike</option>
-          <option value="Rickshaw">🛺 Rickshaw</option>
-          <option value="Car Mini" selected>🚙 Car Mini</option>
-          <option value="Car AC">🚗 Car AC (with AC)</option>
-        </select>
+      <!-- Step 1: Basic Info -->
+      <div id="reg-step1">
+        <div class="step-bar">
+          <div class="step-circle active">1</div>
+          <div class="step-connector"></div>
+          <div class="step-circle inactive">2</div>
+        </div>
+        <p style="text-align:center;font-size:.73rem;color:#555;margin-bottom:.9rem">Step 1 of 2 — Basic Information</p>
+        <div class="form-group"><label>Full Name <span style="color:#f5c518">*</span></label><input type="text" id="r-name" placeholder="Driver name"></div>
+        <div class="form-group"><label>Phone Number <span style="color:#f5c518">*</span></label><input type="tel" id="r-phone" placeholder="+92 300 0000000" inputmode="tel"></div>
+        <div class="form-group">
+          <label>Password <span style="color:#f5c518">*</span></label>
+          <div class="pw-wrap">
+            <input type="password" id="r-pass" placeholder="min 6 characters">
+            <button type="button" class="pw-eye" onclick="togglePw('r-pass')" tabindex="-1">👁</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Vehicle Type <span style="color:#f5c518">*</span></label>
+          <select id="r-vehicle">
+            <option value="Bike">🛵 Bike</option>
+            <option value="Rickshaw">🛺 Rickshaw</option>
+            <option value="Car Mini" selected>🚙 Car Mini</option>
+            <option value="Car AC">🚗 Car AC (with AC)</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Vehicle Model <span style="color:#f5c518">*</span></label><input type="text" id="r-vehicle-model" placeholder="e.g. Suzuki Cultus 2020"></div>
+        <div class="form-group"><label>Number Plate <span style="color:#f5c518">*</span></label><input type="text" id="r-plate" placeholder="e.g. LHR-1234" style="text-transform:uppercase"></div>
+        <button class="btn-primary" onclick="nextRegStep()">Continue → Upload Documents</button>
       </div>
-      <div class="form-group"><label>Vehicle Model</label><input type="text" id="r-vehicle-model" placeholder="e.g. Suzuki Cultus 2020"></div>
-      <div class="form-group"><label>Number Plate</label><input type="text" id="r-plate" placeholder="e.g. LHR-1234" style="text-transform:uppercase"></div>
-      <!-- Photo Uploads -->
-      <div class="photo-upload-group">
-        <span class="photo-upload-lbl">Profile Photo <span class="req">*</span></span>
-        <img id="prev-profile" class="photo-preview-img" style="display:none" src="">
-        <input class="photo-file-input" type="file" id="r-profile-photo" accept="image/*" capture="user" onchange="previewPhoto(this,'prev-profile')">
+
+      <!-- Step 2: Documents (all required) -->
+      <div id="reg-step2" style="display:none">
+        <div class="step-bar">
+          <div class="step-circle done">✓</div>
+          <div class="step-connector done"></div>
+          <div class="step-circle active">2</div>
+        </div>
+        <p style="text-align:center;font-size:.73rem;color:#555;margin-bottom:.9rem">Step 2 of 2 — Required Documents</p>
+        <div class="photo-upload-group">
+          <span class="photo-upload-lbl">Profile Photo <span class="req">*</span></span>
+          <img id="prev-profile" class="photo-preview-img" style="display:none" src="">
+          <input class="photo-file-input" type="file" id="r-profile-photo" accept="image/*" capture="user" onchange="previewPhoto(this,'prev-profile')">
+        </div>
+        <div class="photo-upload-group">
+          <span class="photo-upload-lbl">Driving License (Front) <span class="req">*</span></span>
+          <img id="prev-license" class="photo-preview-img" style="display:none" src="">
+          <input class="photo-file-input" type="file" id="r-license-photo" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-license')">
+        </div>
+        <div class="photo-upload-group">
+          <span class="photo-upload-lbl">CNIC Front <span class="req">*</span></span>
+          <img id="prev-cnic-f" class="photo-preview-img" style="display:none" src="">
+          <input class="photo-file-input" type="file" id="r-cnic-front" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-cnic-f')">
+        </div>
+        <div class="photo-upload-group">
+          <span class="photo-upload-lbl">CNIC Back <span class="req">*</span></span>
+          <img id="prev-cnic-b" class="photo-preview-img" style="display:none" src="">
+          <input class="photo-file-input" type="file" id="r-cnic-back" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-cnic-b')">
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:.5rem">
+          <button class="btn-primary" style="flex:.4;background:#1a1a28;color:#888;border:1px solid #333;margin-top:0" onclick="prevRegStep()">← Back</button>
+          <button class="btn-primary" style="flex:1;margin-top:0" onclick="doRegister()">Create Driver Account</button>
+        </div>
       </div>
-      <div class="photo-upload-group">
-        <span class="photo-upload-lbl">Driving License (Front) <span class="req">*</span></span>
-        <img id="prev-license" class="photo-preview-img" style="display:none" src="">
-        <input class="photo-file-input" type="file" id="r-license-photo" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-license')">
+    </div>
+
+    <!-- Forgot Password -->
+    <div id="forgot-form" style="display:none">
+      <div id="dfp-step1">
+        <div class="form-group"><label>Registered Phone Number</label><input type="tel" id="dfp-phone" placeholder="+92 300 0000000" inputmode="tel"></div>
+        <button class="btn-primary" onclick="driverForgotSendOtp()">Send OTP</button>
+        <div style="text-align:center;margin-top:.5rem"><button class="btn-text-link" onclick="switchTab('login')">← Back to Sign In</button></div>
       </div>
-      <div class="photo-upload-group">
-        <span class="photo-upload-lbl">CNIC Front <span style="color:#555;font-size:.9em">(optional)</span></span>
-        <img id="prev-cnic-f" class="photo-preview-img" style="display:none" src="">
-        <input class="photo-file-input" type="file" id="r-cnic-front" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-cnic-f')">
+      <div id="dfp-step2" style="display:none">
+        <p style="font-size:.82rem;color:#888;margin-bottom:.6rem">Enter the 4-digit code sent to your phone.</p>
+        <div class="fp-otp-box" id="dfp-otp-box" style="display:none">
+          <div class="fp-otp-code" id="dfp-otp-code"></div>
+          <div class="fp-otp-note">Demo mode — SMS in production</div>
+        </div>
+        <div class="form-group"><label>OTP Code</label><input type="text" id="dfp-otp" placeholder="4-digit code" maxlength="4" inputmode="numeric" style="letter-spacing:.3em;font-size:1.2rem;text-align:center"></div>
+        <button class="btn-primary" onclick="driverForgotVerifyOtp()">Verify OTP</button>
+        <div style="text-align:center;margin-top:.5rem"><button class="btn-text-link" onclick="driverForgotSendOtp()">Resend OTP</button></div>
       </div>
-      <div class="photo-upload-group">
-        <span class="photo-upload-lbl">CNIC Back <span style="color:#555;font-size:.9em">(optional)</span></span>
-        <img id="prev-cnic-b" class="photo-preview-img" style="display:none" src="">
-        <input class="photo-file-input" type="file" id="r-cnic-back" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-cnic-b')">
+      <div id="dfp-step3" style="display:none">
+        <p style="font-size:.82rem;color:#66bb66;margin-bottom:.75rem">✓ OTP verified! Set your new password.</p>
+        <div class="form-group">
+          <label>New Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="dfp-newpass" placeholder="min 6 characters">
+            <button type="button" class="pw-eye" onclick="togglePw('dfp-newpass')" tabindex="-1">👁</button>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="driverForgotResetPassword()">Reset Password</button>
       </div>
-      <div class="form-group"><label>Password</label><input type="password" id="r-pass" placeholder="••••••••"></div>
-      <button class="btn-primary" onclick="doRegister()">Create Driver Account</button>
     </div>
 
     <div class="auth-error" id="auth-error"></div>
@@ -339,6 +430,13 @@ textarea.support-input{resize:vertical;min-height:85px}
       <input type="checkbox" id="online-toggle" class="toggle-input" onchange="toggleOnline(this.checked)">
       <label for="online-toggle" class="toggle-label"></label>
     </div>
+  </div>
+
+  <!-- Pending Approval Card (shown when accountStatus === 'pending') -->
+  <div id="pending-card" class="pending-card" style="display:none">
+    <div class="pending-card-icon">⏳</div>
+    <div class="pending-card-title">Documents Under Admin Review</div>
+    <div class="pending-card-msg">Your registration documents have been submitted and are under Admin review. You will be notified once your account is approved and you can start accepting rides.</div>
   </div>
 
   <div id="map"></div>
@@ -514,7 +612,14 @@ function showToast(msg, type = 'info') {
 function switchTab(t) {
   document.getElementById('login-form').style.display    = t === 'login'    ? 'block' : 'none';
   document.getElementById('register-form').style.display = t === 'register' ? 'block' : 'none';
-  document.querySelectorAll('.auth-tab').forEach((b, i) => b.classList.toggle('active', (i === 0) === (t === 'login')));
+  document.getElementById('forgot-form').style.display   = t === 'forgot'   ? 'block' : 'none';
+  // Reset forgot steps whenever we open it
+  if (t === 'forgot') {
+    ['dfp-step1','dfp-step2','dfp-step3'].forEach((id, i) => {
+      const el = document.getElementById(id); if (el) el.style.display = i === 0 ? 'block' : 'none';
+    });
+  }
+  document.querySelectorAll('.auth-tab').forEach((b, i) => b.classList.toggle('active', (i === 0) === (t === 'login') || (i === 1) === (t === 'register')));
   document.getElementById('auth-error').textContent = '';
 }
 
@@ -528,13 +633,49 @@ async function apiCall(path, method = 'GET', body = null) {
 }
 
 async function doLogin() {
-  const email = document.getElementById('l-email').value.trim();
-  const pass  = document.getElementById('l-pass').value;
+  const identifier = document.getElementById('l-email').value.trim();
+  const pass = document.getElementById('l-pass').value;
+  const errEl = document.getElementById('auth-error');
+  if (!identifier) return (errEl.textContent = 'Enter your phone number or email');
+  if (!pass) return (errEl.textContent = 'Enter your password');
   try {
-    const res = await apiCall('/api/auth/login', 'POST', { email, password: pass });
-    if (res.user.role !== 'driver') throw new Error('Please use a driver account. Register as driver.');
+    const res = await apiCall('/api/auth/login', 'POST', { identifier, password: pass });
+    if (res.user.role !== 'driver') throw new Error('This account is registered as a customer. Please use the Driver App.');
     saveSession(res);
-  } catch (e) { document.getElementById('auth-error').textContent = e.message; }
+  } catch (e) { errEl.textContent = e.message; }
+}
+
+// ── Password visibility toggle ──────────────────────────────────────────────
+function togglePw(id) {
+  const inp = document.getElementById(id);
+  const btn = inp?.nextElementSibling;
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (btn) btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+// ── Registration step navigation ────────────────────────────────────────────
+function nextRegStep() {
+  const errEl = document.getElementById('auth-error');
+  const name  = document.getElementById('r-name').value.trim();
+  const phone = document.getElementById('r-phone').value.trim();
+  const pass  = document.getElementById('r-pass').value;
+  const model = document.getElementById('r-vehicle-model').value.trim();
+  const plate = document.getElementById('r-plate').value.trim();
+  if (!name)  return (errEl.textContent = 'Full name is required');
+  if (!phone) return (errEl.textContent = 'Phone number is required');
+  if (pass.length < 6) return (errEl.textContent = 'Password must be at least 6 characters');
+  if (!model) return (errEl.textContent = 'Vehicle model is required');
+  if (!plate) return (errEl.textContent = 'Number plate is required');
+  errEl.textContent = '';
+  document.getElementById('reg-step1').style.display = 'none';
+  document.getElementById('reg-step2').style.display = 'block';
+}
+
+function prevRegStep() {
+  document.getElementById('reg-step2').style.display = 'none';
+  document.getElementById('reg-step1').style.display = 'block';
+  document.getElementById('auth-error').textContent = '';
 }
 
 // ── Image Compression ──────────────────────────────────────────────────────
@@ -567,7 +708,6 @@ function previewPhoto(input, previewId) {
 
 async function doRegister() {
   const name         = document.getElementById('r-name').value.trim();
-  const email        = document.getElementById('r-email').value.trim();
   const phone        = document.getElementById('r-phone').value.trim();
   const vehicle      = document.getElementById('r-vehicle').value;
   const vehicleModel = document.getElementById('r-vehicle-model').value.trim();
@@ -580,20 +720,22 @@ async function doRegister() {
   const cnicBFile   = document.getElementById('r-cnic-back').files[0];
 
   const errEl = document.getElementById('auth-error');
-  if (!profileFile) { errEl.textContent = 'Profile photo is required'; return; }
+  if (!profileFile) { errEl.textContent = 'Profile photo is required';        return; }
   if (!licenseFile) { errEl.textContent = 'Driving license photo is required'; return; }
+  if (!cnicFFile)   { errEl.textContent = 'CNIC Front photo is required';      return; }
+  if (!cnicBFile)   { errEl.textContent = 'CNIC Back photo is required';       return; }
 
-  errEl.textContent = 'Uploading photos…';
+  errEl.textContent = 'Compressing photos…';
   try {
     const [profilePhoto, licensePhoto, cnicFront, cnicBack] = await Promise.all([
       compressImage(profileFile),
       compressImage(licenseFile),
-      cnicFFile ? compressImage(cnicFFile) : Promise.resolve(''),
-      cnicBFile ? compressImage(cnicBFile) : Promise.resolve('')
+      compressImage(cnicFFile),
+      compressImage(cnicBFile)
     ]);
     errEl.textContent = 'Creating account…';
     const res = await apiCall('/api/auth/register', 'POST', {
-      name, email, phone, password: pass,
+      name, phone, password: pass,
       role: 'driver', vehicleType: vehicle,
       vehicleModel, vehiclePlate,
       profilePhoto, licensePhoto, cnicFront, cnicBack
@@ -602,8 +744,53 @@ async function doRegister() {
   } catch (e) { errEl.textContent = e.message; }
 }
 
+// ── Driver Forgot Password ──────────────────────────────────────────────────
+let _dfpPhone = '';
+
+async function driverForgotSendOtp() {
+  const phone = document.getElementById('dfp-phone').value.trim();
+  const errEl = document.getElementById('auth-error');
+  if (!phone) return (errEl.textContent = 'Enter your registered phone number');
+  errEl.textContent = '';
+  try {
+    const res = await apiCall('/api/auth/forgot-password', 'POST', { phone });
+    _dfpPhone = phone;
+    if (res.otp) {
+      document.getElementById('dfp-otp-code').textContent = res.otp;
+      document.getElementById('dfp-otp-box').style.display = 'block';
+    }
+    document.getElementById('dfp-step1').style.display = 'none';
+    document.getElementById('dfp-step2').style.display = 'block';
+  } catch (e) { errEl.textContent = e.message; }
+}
+
+async function driverForgotVerifyOtp() {
+  const otp = document.getElementById('dfp-otp').value.trim();
+  const errEl = document.getElementById('auth-error');
+  if (otp.length !== 4) return (errEl.textContent = 'Enter the 4-digit OTP');
+  errEl.textContent = '';
+  document.getElementById('dfp-step2').style.display = 'none';
+  document.getElementById('dfp-step3').style.display = 'block';
+}
+
+async function driverForgotResetPassword() {
+  const otp     = document.getElementById('dfp-otp').value.trim();
+  const newPass = document.getElementById('dfp-newpass').value;
+  const errEl   = document.getElementById('auth-error');
+  if (newPass.length < 6) return (errEl.textContent = 'Password must be at least 6 characters');
+  try {
+    await apiCall('/api/auth/reset-password', 'POST', { phone: _dfpPhone, otp, newPassword: newPass });
+    errEl.textContent = '';
+    switchTab('login');
+    document.getElementById('l-email').value = _dfpPhone;
+    _dfpPhone = '';
+    showToast('Password reset! Please sign in.', 'success');
+  } catch (e) { errEl.textContent = e.message; }
+}
+
 function saveSession(res) {
-  token = res.token; user = res.user;
+  token = res.token;
+  user  = { ...res.user, accountStatus: res.user.accountStatus || 'active' };
   localStorage.setItem('rh_token', token);
   localStorage.setItem('rh_user', JSON.stringify(user));
   bootApp();
@@ -638,6 +825,16 @@ function bootApp() {
   // Request browser notification permission so alerts fire even when tab is in background
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
+  }
+  // Show pending approval card if not yet approved
+  const pendingCard = document.getElementById('pending-card');
+  const onlineBar   = document.querySelector('.online-bar');
+  if (user?.accountStatus === 'pending') {
+    if (pendingCard) pendingCard.style.display = 'block';
+    if (onlineBar)   onlineBar.style.display   = 'none';
+  } else {
+    if (pendingCard) pendingCard.style.display = 'none';
+    if (onlineBar)   onlineBar.style.display   = '';
   }
 }
 
@@ -715,6 +912,12 @@ function clearRideMap() {
 
 // ── Online Toggle ──────────────────────────────────────────────────────────
 function toggleOnline(online) {
+  if (online && user?.accountStatus === 'pending') {
+    showToast('Account pending Admin approval — cannot go online yet', 'error');
+    const toggle = document.getElementById('online-toggle');
+    if (toggle) toggle.checked = false;
+    return;
+  }
   isOnline = online;
   socket?.emit('driver:status', { isOnline: online });
   document.getElementById('status-text').textContent = online ? 'You are Online ✓' : 'You are Offline';
@@ -740,6 +943,17 @@ function connectSocket() {
     const badge = document.getElementById('driver-ticket-badge');
     badge.style.display = 'inline';
     badge.textContent   = String((parseInt(badge.textContent) || 0) + 1);
+  });
+
+  // Account approved by Admin (was pending)
+  socket.on('account:activated', () => {
+    user.accountStatus = 'active';
+    localStorage.setItem('rh_user', JSON.stringify(user));
+    const pendingCard = document.getElementById('pending-card');
+    const onlineBar   = document.querySelector('.online-bar');
+    if (pendingCard) pendingCard.style.display = 'none';
+    if (onlineBar)   onlineBar.style.display   = '';
+    showToast('🎉 Your account has been approved! You can now go online.', 'success');
   });
 
   // Account suspended / balance too low

@@ -53,6 +53,11 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .fp-otp-code{font-size:2rem;font-weight:800;letter-spacing:.25em;color:#f5c518}
 .fp-otp-note{font-size:.7rem;color:#888;margin-top:.35rem}
 .btn-text-link{background:none;border:none;color:#f5c518;font-size:.8rem;cursor:pointer;text-decoration:underline;margin-top:.4rem;display:inline-block;padding:0}
+/* ── Password eye toggle ── */
+.pw-wrap{position:relative;display:block}
+.pw-wrap input{padding-right:2.8rem!important;width:100%}
+.pw-eye{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#555;cursor:pointer;font-size:1rem;padding:.15rem;display:flex;align-items:center;justify-content:center;line-height:1;transition:color .2s}
+.pw-eye:hover{color:#f5c518}
 /* ── Rating & Support modals ── */
 #rating-modal.open,#support-modal.open,#my-tickets-modal.open{display:flex!important}
 .star-btn{background:none;border:none;font-size:1.8rem;color:#334155;cursor:pointer;transition:color .15s;line-height:1}
@@ -276,8 +281,14 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
     <!-- Sign In -->
     <div id="login-form">
-      <div class="form-group"><label>Phone or Email</label><input type="text" id="l-email" placeholder="03001234567 or you@email.com" autocomplete="username" inputmode="email"></div>
-      <div class="form-group"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="form-group"><label>Phone or Email</label><input type="text" id="l-email" placeholder="03001234567 or you@email.com" autocomplete="username" inputmode="tel"></div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password">
+          <button type="button" class="pw-eye" onclick="togglePw('l-pass')" tabindex="-1">👁</button>
+        </div>
+      </div>
       <button class="btn-primary" onclick="doLogin()">Sign In</button>
       <div style="text-align:center;margin-top:.6rem">
         <button class="btn-text-link" onclick="switchTab('forgot')">Forgot Password?</button>
@@ -286,10 +297,16 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
     <!-- Register -->
     <div id="register-form" style="display:none">
-      <div class="form-group"><label>Full Name</label><input type="text" id="r-name" placeholder="Your full name"></div>
-      <div class="form-group"><label>Phone Number</label><input type="tel" id="r-phone" placeholder="+92 300 0000000" inputmode="tel"></div>
+      <div class="form-group"><label>Full Name <span style="color:#f5c518">*</span></label><input type="text" id="r-name" placeholder="Your full name"></div>
+      <div class="form-group"><label>Phone Number <span style="color:#f5c518">*</span></label><input type="tel" id="r-phone" placeholder="+92 300 0000000" inputmode="tel"></div>
       <div class="form-group"><label>Email <span style="color:#555;font-size:.75em">(optional)</span></label><input type="email" id="r-email" placeholder="you@email.com"></div>
-      <div class="form-group"><label>Password</label><input type="password" id="r-pass" placeholder="min 6 characters" autocomplete="new-password"></div>
+      <div class="form-group">
+        <label>Password <span style="color:#f5c518">*</span></label>
+        <div class="pw-wrap">
+          <input type="password" id="r-pass" placeholder="min 6 characters" autocomplete="new-password">
+          <button type="button" class="pw-eye" onclick="togglePw('r-pass')" tabindex="-1">👁</button>
+        </div>
+      </div>
       <button class="btn-primary" onclick="doRegister()">Create Account</button>
     </div>
 
@@ -315,7 +332,13 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <!-- Step 3: new password -->
       <div id="fp-step3" style="display:none">
         <p style="font-size:.82rem;color:#66bb66;margin-bottom:.75rem">✓ OTP verified! Set your new password.</p>
-        <div class="form-group"><label>New Password</label><input type="password" id="fp-newpass" placeholder="min 6 characters" autocomplete="new-password"></div>
+        <div class="form-group">
+          <label>New Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="fp-newpass" placeholder="min 6 characters" autocomplete="new-password">
+            <button type="button" class="pw-eye" onclick="togglePw('fp-newpass')" tabindex="-1">👁</button>
+          </div>
+        </div>
         <button class="btn-primary" onclick="forgotResetPassword()">Reset Password</button>
       </div>
     </div>
@@ -742,12 +765,21 @@ async function doRegister() {
   const email = document.getElementById('r-email').value.trim();
   const pass  = document.getElementById('r-pass').value;
   if (!name) return (document.getElementById('auth-error').textContent = 'Full name is required');
-  if (!phone && !email) return (document.getElementById('auth-error').textContent = 'Phone number or email is required');
+  if (!phone) return (document.getElementById('auth-error').textContent = 'Phone number is required');
   if (pass.length < 6) return (document.getElementById('auth-error').textContent = 'Password must be at least 6 characters');
   try {
     const res = await apiCall('/api/auth/register', 'POST', { name, phone, email, password: pass, role: 'customer' });
     saveSession(res);
   } catch (e) { document.getElementById('auth-error').textContent = e.message; }
+}
+
+// ── Password visibility toggle ─────────────────────────────────────────────
+function togglePw(id) {
+  const inp = document.getElementById(id);
+  const btn = inp?.nextElementSibling;
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (btn) btn.textContent = inp.type === 'password' ? '👁' : '🙈';
 }
 
 // ── Forgot Password Flow ───────────────────────────────────────────────────

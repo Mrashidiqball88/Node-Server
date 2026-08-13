@@ -243,7 +243,7 @@ app.post('/api/auth/register', async (req, res) => {
     const { name, email, password, phone, role, vehicleType, vehicleModel, vehiclePlate,
             profilePhoto, licensePhoto, cnicFront, cnicBack } = req.body;
     if (!name || !password) return res.status(400).json({ error: 'Name and password are required' });
-    if (!email && !phone)   return res.status(400).json({ error: 'Email or phone number is required' });
+    if (!phone)             return res.status(400).json({ error: 'Phone number is required' });
 
     const resolvedEmail = email ? email.toLowerCase().trim() : null;
 
@@ -278,7 +278,8 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({
       token,
       user: { id: user._id, name: user.name, email: user.email || '', phone: user.phone,
-              role: user.role, vehicleType: user.vehicleType,
+              role: user.role, accountStatus: user.accountStatus,
+              vehicleType: user.vehicleType,
               vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate }
     });
   } catch (err) {
@@ -298,9 +299,9 @@ app.post('/api/auth/login', async (req, res) => {
       ? await User.findOne({ email: identifier.toLowerCase() })
       : await User.findOne({ phone: identifier });
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    if (!user) return res.status(404).json({ error: 'No account found with this phone number or email' });
+    if (!(await bcrypt.compare(password, user.password)))
+      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     const token = jwt.sign(
       { id: user._id, email: user.email || '', role: user.role, name: user.name },
       JWT_SECRET, { expiresIn: '7d' }
@@ -308,7 +309,9 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({
       token,
       user: { id: user._id, name: user.name, email: user.email || '', phone: user.phone,
-              role: user.role, vehicleType: user.vehicleType,
+              role: user.role, accountStatus: user.accountStatus,
+              profilePhoto: user.profilePhoto || '',
+              vehicleType: user.vehicleType,
               vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate, rating: user.rating }
     });
   } catch (err) {
@@ -1450,8 +1453,12 @@ io.on('connection', (socket) => {
         User.findById(id).select('accountStatus').catch(() => null),
         Wallet.findOne({ user: id }).select('balance').catch(() => null)
       ]);
+      if (driver?.accountStatus === 'pending') {
+        socket.emit('account:suspended', { reason: 'Your account is pending Admin approval. You will be notified once approved.' });
+        return;
+      }
       if (driver?.accountStatus === 'suspended' || driver?.accountStatus === 'blocked') {
-        socket.emit('account:suspended', { reason: 'Your account is not active. Contact admin.' });
+        socket.emit('account:suspended', { reason: 'Your account has been suspended. Please contact Admin.' });
         return;
       }
       if (wallet && wallet.balance < 0) {
