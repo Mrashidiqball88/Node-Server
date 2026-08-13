@@ -72,7 +72,17 @@ const userSchema = new mongoose.Schema({
     phone: { type: String, required: true }
   }],
   otpCode:   { type: String,  default: null },
-  otpExpiry: { type: Date,    default: null }
+  otpExpiry: { type: Date,    default: null },
+  // Admin management
+  accountStatus:   { type: String, enum: ['active','pending','suspended','blocked'], default: 'active' },
+  suspendReason:   { type: String, default: '' },
+  suspendedAt:     { type: Date,   default: null },
+  // Driver verification documents (URL strings)
+  profilePhoto:    { type: String, default: '' },
+  cnicFront:       { type: String, default: '' },
+  cnicBack:        { type: String, default: '' },
+  licensePhoto:    { type: String, default: '' },
+  vehicleRegPhoto: { type: String, default: '' }
 }, { timestamps: true });
 
 const rideSchema = new mongoose.Schema({
@@ -178,20 +188,28 @@ function authMiddleware(req, res, next) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Admin Middleware
+// Admin Middleware (two flavours)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Legacy: used by /api/payments/* routes (needs authMiddleware first)
 async function adminMiddleware(req, res, next) {
-  // authMiddleware must run first to populate req.user
   try {
     const user = await User.findById(req.user.id).select('isAdmin');
-    if (!user || !user.isAdmin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
+    if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
     next();
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+}
+
+// New: self-contained — verifies admin JWT claim (no DB lookup)
+function adminJwt(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Admin token required' });
+  try {
+    const payload = jwt.verify(auth.slice(7), JWT_SECRET);
+    if (!payload.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+    req.admin = payload;
+    next();
+  } catch { return res.status(401).json({ error: 'Invalid or expired admin token' }); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,15 +230,17 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(409).json({ error: 'Phone number already registered' });
 
     const hash = await bcrypt.hash(password, 12);
+    const resolvedRole = role || 'customer';
     const user = await User.create({
       name,
-      email:        resolvedEmail  || undefined,   // sparse index allows undefined
-      phone:        phone?.trim()  || '',
-      password:     hash,
-      role:         role           || 'customer',
-      vehicleType:  vehicleType    || '',
-      vehicleModel: vehicleModel   || '',
-      vehiclePlate: vehiclePlate   || ''
+      email:         resolvedEmail  || undefined,
+      phone:         phone?.trim()  || '',
+      password:      hash,
+      role:          resolvedRole,
+      accountStatus: resolvedRole === 'driver' ? 'pending' : 'active',
+      vehicleType:   vehicleType    || '',
+      vehicleModel:  vehicleModel   || '',
+      vehiclePlate:  vehiclePlate   || ''
     });
     await Wallet.create({ user: user._id, balance: 0, transactions: [] });
 
@@ -848,7 +868,8 @@ app.post('/api/sos', authMiddleware, async (req, res) => {
       message:  message  || 'SOS Emergency Alert!',
       ride:     rideId   || null
     });
-    io.emit('sos:alert', {
+    const sosPayload = {
+      sosId:             sos._id,
       userId:            req.user.id,
       userName:          req.user.name,
       userPhone:         userDoc?.phone || '',
@@ -856,7 +877,9 @@ app.post('/api/sos', authMiddleware, async (req, res) => {
       driverInfo:        driverInfo || null,
       emergencyContacts: userDoc?.emergencyContacts || [],
       ts: new Date().toISOString()
-    });
+    };
+    io.emit('sos:alert', sosPayload);
+    io.to('admin-room').emit('sos:alert', sosPayload); // explicit to admin room
     res.status(201).json({
       success: true, sos,
       emergencyContacts: userDoc?.emergencyContacts || []
@@ -909,6 +932,200 @@ app.get('/api/geocode', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Admin Routes  (/api/admin/*)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/admin/login — env-credential login, returns admin JWT
+app.post('/api/admin/login', (req, res) => {
+  const { email, password } = req.body;
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL    || 'admin@myride.com';
+  const ADMIN_PASS  = process.env.ADMIN_PASSWORD || 'admin1234';
+  if (!email || !password || email !== ADMIN_EMAIL || password !== ADMIN_PASS)
+    return res.status(401).json({ error: 'Invalid admin credentials' });
+  const token = jwt.sign({ isAdmin: true, email }, JWT_SECRET, { expiresIn: '12h' });
+  res.json({ token, admin: { email } });
+});
+
+// GET /api/admin/stats — overview dashboard numbers
+app.get('/api/admin/stats', adminJwt, async (req, res) => {
+  try {
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const [totalDrivers, pendingDrivers, suspendedDrivers, totalPassengers,
+           blockedPassengers, activeRides, pendingPayments, unresolvedSOS] =
+      await Promise.all([
+        User.countDocuments({ role: 'driver' }),
+        User.countDocuments({ role: 'driver', accountStatus: 'pending' }),
+        User.countDocuments({ role: 'driver', accountStatus: 'suspended' }),
+        User.countDocuments({ role: 'customer' }),
+        User.countDocuments({ role: 'customer', accountStatus: 'blocked' }),
+        Ride.countDocuments({ status: { $in: ['requested','accepted','arrived','in-progress'] } }),
+        Payment.countDocuments({ status: 'pending' }),
+        SOS.countDocuments({ resolved: false })
+      ]);
+    const earningsAgg = await Payment.aggregate([
+      { $match: { status: 'approved', updatedAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    res.json({
+      totalDrivers, pendingDrivers, suspendedDrivers, totalPassengers,
+      blockedPassengers, activeRides, pendingPayments, unresolvedSOS,
+      todayEarnings: earningsAgg[0]?.total || 0
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/drivers?status=all|pending|approved|suspended|blocked
+app.get('/api/admin/drivers', adminJwt, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = { role: 'driver' };
+    if (status && status !== 'all') filter.accountStatus = status;
+    const drivers = await User.find(filter)
+      .select('-password -otpCode -otpExpiry')
+      .sort('-createdAt').limit(200);
+    res.json(drivers);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/passengers?status=all|active|blocked
+app.get('/api/admin/passengers', adminJwt, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = { role: 'customer' };
+    if (status === 'blocked') filter.accountStatus = 'blocked';
+    else if (status === 'active') filter.accountStatus = { $ne: 'blocked' };
+    const passengers = await User.find(filter)
+      .select('-password -otpCode -otpExpiry')
+      .sort('-createdAt').limit(200);
+    // Attach ride count to each passenger
+    const withCounts = await Promise.all(passengers.map(async p => {
+      const rideCount = await Ride.countDocuments({ passenger: p._id });
+      return { ...p.toObject(), rideCount };
+    }));
+    res.json(withCounts);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/admin/users/:id/status — approve|suspend|block|unblock
+app.patch('/api/admin/users/:id/status', adminJwt, async (req, res) => {
+  try {
+    const { action, reason } = req.body;
+    let update = {};
+    if      (action === 'approve')  update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
+    else if (action === 'suspend')  update = { accountStatus: 'suspended', suspendReason: reason || 'Temporary suspension', suspendedAt: new Date() };
+    else if (action === 'block')    update = { accountStatus: 'blocked',   suspendReason: reason || 'Permanently blocked',  suspendedAt: new Date() };
+    else if (action === 'unblock')  update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
+    else return res.status(400).json({ error: 'Invalid action' });
+
+    const user = await User.findByIdAndUpdate(req.params.id, { ...update, isOnline: false }, { new: true }).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (action === 'suspend' || action === 'block')
+      io.to(`user:${req.params.id}`).emit('account:suspended', { reason: reason || 'Account suspended' });
+    if (action === 'approve' || action === 'unblock')
+      io.to(`user:${req.params.id}`).emit('account:activated', {});
+
+    res.json({ success: true, user });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/rides?status=active|completed|cancelled|all&date=YYYY-MM-DD
+app.get('/api/admin/rides', adminJwt, async (req, res) => {
+  try {
+    const { status, date } = req.query;
+    const filter = {};
+    if (status === 'active') filter.status = { $in: ['requested','accepted','arrived','in-progress'] };
+    else if (status && status !== 'all') filter.status = status;
+    if (date) {
+      const d = new Date(date); d.setUTCHours(0,0,0,0);
+      const d2 = new Date(d);   d2.setUTCHours(23,59,59,999);
+      filter.createdAt = { $gte: d, $lte: d2 };
+    }
+    const rides = await Ride.find(filter)
+      .populate('passenger', 'name phone')
+      .populate('driver',    'name phone vehicleModel vehiclePlate')
+      .sort('-createdAt').limit(100);
+    res.json(rides);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/sos?resolved=false|true|all
+app.get('/api/admin/sos', adminJwt, async (req, res) => {
+  try {
+    const { resolved } = req.query;
+    const filter = {};
+    if (resolved === 'false') filter.resolved = false;
+    else if (resolved === 'true') filter.resolved = true;
+    const alerts = await SOS.find(filter)
+      .populate('user', 'name phone role')
+      .populate('ride')
+      .sort('-createdAt').limit(50);
+    res.json(alerts);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/admin/sos/:id/resolve', adminJwt, async (req, res) => {
+  try {
+    await SOS.updateOne({ _id: req.params.id }, { resolved: true });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/payments?status=pending|approved|rejected|all
+app.get('/api/admin/payments', adminJwt, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = {};
+    if (status && status !== 'all') filter.status = status;
+    const payments = await Payment.find(filter)
+      .populate('driver', 'name phone vehicleType vehiclePlate')
+      .sort('-createdAt').limit(100);
+    res.json(payments);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/admin/payments/:id/approve', adminJwt, async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ error: 'Not found' });
+    if (payment.status !== 'pending') return res.status(400).json({ error: `Already ${payment.status}` });
+    payment.status = 'approved'; payment.adminNote = req.body.adminNote || '';
+    await payment.save();
+    io.to(`user:${payment.driver}`).emit('payment:approved', { amount: payment.amount });
+    res.json({ success: true, payment });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/admin/payments/:id/reject', adminJwt, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ error: 'Not found' });
+    if (payment.status !== 'pending') return res.status(400).json({ error: `Already ${payment.status}` });
+    payment.status = 'rejected'; payment.adminNote = reason || '';
+    await payment.save();
+    io.to(`user:${payment.driver}`).emit('payment:rejected', { reason: reason || 'Rejected' });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/daily-income — last 30 days grouped by date
+app.get('/api/admin/daily-income', adminJwt, async (req, res) => {
+  try {
+    const since = new Date(); since.setDate(since.getDate() - 30); since.setUTCHours(0,0,0,0);
+    const payments = await Payment.find({ status: 'approved', updatedAt: { $gte: since } })
+      .populate('driver', 'name vehicleType');
+    const byDate = {};
+    payments.forEach(p => {
+      const d = (p.updatedAt || p.createdAt).toISOString().slice(0,10);
+      if (!byDate[d]) byDate[d] = { date: d, total: 0, count: 0 };
+      byDate[d].total += p.amount; byDate[d].count++;
+    });
+    res.json(Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date)));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Health Check
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -941,9 +1158,21 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  const { id, name, role } = socket.user;
+  const user = socket.user;
+
+  // ── Admin socket ───────────────────────────────────────────────────────────
+  if (user.isAdmin) {
+    socket.join('admin-room');
+    console.log(`Admin socket connected [${user.email}]`);
+    socket.on('disconnect', () => console.log(`Admin socket disconnected [${user.email}]`));
+    return;  // no further driver/passenger setup
+  }
+
+  const { id, name, role } = user;
   console.log(`Socket connected: ${name} [${role}]`);
 
+  // Join personal notification room
+  socket.join(`user:${id}`);
   if (role === 'driver') socket.join('drivers-online');
 
   socket.on('ride:join',  (rideId) => socket.join(`ride:${rideId}`));
@@ -962,6 +1191,13 @@ io.on('connection', (socket) => {
   // Driver toggles online/offline
   socket.on('driver:status', async ({ isOnline }) => {
     if (role !== 'driver') return;
+    if (isOnline) {
+      const driver = await User.findById(id).select('accountStatus').catch(() => null);
+      if (driver?.accountStatus === 'suspended' || driver?.accountStatus === 'blocked') {
+        socket.emit('account:suspended', { reason: 'Your account is not active. Contact admin.' });
+        return;
+      }
+    }
     await User.updateOne({ _id: id }, { isOnline }).catch(() => {});
     if (isOnline) socket.join('drivers-online');
     else          socket.leave('drivers-online');
