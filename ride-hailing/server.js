@@ -52,21 +52,27 @@ function normalizeMongoUri(uri) {
 
 const userSchema = new mongoose.Schema({
   name:    { type: String, required: true, trim: true },
-  email:   { type: String, required: true, unique: true, lowercase: true, trim: true },
+  email:   { type: String, unique: true, sparse: true, lowercase: true, trim: true }, // optional
   password:{ type: String, required: true },
-  phone:   { type: String, default: '' },
+  phone:   { type: String, default: '', trim: true },
   role:    { type: String, enum: ['customer', 'driver'], default: 'customer' },
   vehicleType:  { type: String, enum: ['Bike', 'Rickshaw', 'Car Mini', 'Car AC', ''], default: '' },
-  vehicleModel: { type: String, default: '' },  // e.g. "Suzuki Cultus"
-  vehiclePlate: { type: String, default: '' },  // e.g. "LHR-1234"
+  vehicleModel: { type: String, default: '' },
+  vehiclePlate: { type: String, default: '' },
   isOnline: { type: Boolean, default: false },
   isAdmin:  { type: Boolean, default: false },
   currentLocation: {
     lat: { type: Number, default: 0 },
     lng: { type: Number, default: 0 }
   },
-  rating:     { type: Number, default: 5.0 },
-  totalRides: { type: Number, default: 0 }
+  rating:       { type: Number, default: 5.0 },
+  totalRides:   { type: Number, default: 0 },
+  emergencyContacts: [{
+    name:  { type: String, default: '' },
+    phone: { type: String, required: true }
+  }],
+  otpCode:   { type: String,  default: null },
+  otpExpiry: { type: Date,    default: null }
 }, { timestamps: true });
 
 const rideSchema = new mongoose.Schema({
@@ -190,31 +196,38 @@ async function adminMiddleware(req, res, next) {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, phone, role, vehicleType, vehicleModel, vehiclePlate } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Name, email and password are required' });
-    }
-    if (await User.findOne({ email })) {
+    if (!name || !password) return res.status(400).json({ error: 'Name and password are required' });
+    if (!email && !phone)   return res.status(400).json({ error: 'Email or phone number is required' });
+
+    const resolvedEmail = email ? email.toLowerCase().trim() : null;
+
+    if (resolvedEmail && await User.findOne({ email: resolvedEmail }))
       return res.status(409).json({ error: 'Email already registered' });
-    }
+    if (phone && await User.findOne({ phone: phone.trim() }))
+      return res.status(409).json({ error: 'Phone number already registered' });
+
     const hash = await bcrypt.hash(password, 12);
     const user = await User.create({
-      name, email, password: hash,
-      phone:        phone        || '',
-      role:         role         || 'customer',
-      vehicleType:  vehicleType  || '',
-      vehicleModel: vehicleModel || '',
-      vehiclePlate: vehiclePlate || ''
+      name,
+      email:        resolvedEmail  || undefined,   // sparse index allows undefined
+      phone:        phone?.trim()  || '',
+      password:     hash,
+      role:         role           || 'customer',
+      vehicleType:  vehicleType    || '',
+      vehicleModel: vehicleModel   || '',
+      vehiclePlate: vehiclePlate   || ''
     });
     await Wallet.create({ user: user._id, balance: 0, transactions: [] });
 
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role, name: user.name },
+      { id: user._id, email: user.email || '', role: user.role, name: user.name },
       JWT_SECRET, { expiresIn: '7d' }
     );
     res.status(201).json({
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role,
-              vehicleType: user.vehicleType, vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate }
+      user: { id: user._id, name: user.name, email: user.email || '', phone: user.phone,
+              role: user.role, vehicleType: user.vehicleType,
+              vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -223,25 +236,85 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    const user = await User.findOne({ email });
+    // Accept { identifier, password } (new) or { email, password } (legacy)
+    const identifier = (req.body.identifier || req.body.email || '').trim();
+    const { password } = req.body;
+    if (!identifier || !password) return res.status(400).json({ error: 'Phone/email and password required' });
+
+    // Look up by email if it contains @, otherwise by phone
+    const user = identifier.includes('@')
+      ? await User.findOne({ email: identifier.toLowerCase() })
+      : await User.findOne({ phone: identifier });
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const token = jwt.sign(
-      { id: user._id, email: user.email, role: user.role, name: user.name },
+      { id: user._id, email: user.email || '', role: user.role, name: user.name },
       JWT_SECRET, { expiresIn: '7d' }
     );
     res.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role,
-              vehicleType: user.vehicleType, vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate,
-              phone: user.phone, rating: user.rating }
+      user: { id: user._id, name: user.name, email: user.email || '', phone: user.phone,
+              role: user.role, vehicleType: user.vehicleType,
+              vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate, rating: user.rating }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Forgot Password (OTP-based) ───────────────────────────────────────────
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number required' });
+    const user = await User.findOne({ phone: phone.trim() });
+    if (!user) return res.status(404).json({ error: 'No account found with this phone number' });
+
+    const otp = String(Math.floor(1000 + Math.random() * 9000));   // 4-digit
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);           // 10 min
+    await User.updateOne({ _id: user._id }, { otpCode: otp, otpExpiry: expiry });
+
+    console.log(`[OTP] ${user.name} (${phone}): ${otp}`);  // simulate SMS
+    // In production: integrate Twilio / Infobip to send real SMS
+    res.json({ success: true, otp, hint: 'OTP returned for demo — in production this is SMS-only' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { phone, otp, newPassword } = req.body;
+    if (!phone || !otp || !newPassword)
+      return res.status(400).json({ error: 'Phone, OTP, and new password required' });
+    const user = await User.findOne({ phone: phone.trim(), otpCode: otp });
+    if (!user) return res.status(400).json({ error: 'Invalid or expired OTP' });
+    if (user.otpExpiry < new Date()) return res.status(400).json({ error: 'OTP has expired — request a new one' });
+    const hash = await bcrypt.hash(newPassword, 12);
+    await User.updateOne({ _id: user._id }, { password: hash, otpCode: null, otpExpiry: null });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Emergency Contacts ─────────────────────────────────────────────────────
+
+app.get('/api/auth/emergency-contacts', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('emergencyContacts');
+    res.json(user?.emergencyContacts || []);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/auth/emergency-contacts', authMiddleware, async (req, res) => {
+  try {
+    const contacts = (req.body.contacts || [])
+      .filter(c => c.phone && c.phone.trim())
+      .slice(0, 2)
+      .map(c => ({ name: (c.name || '').trim(), phone: c.phone.trim() }));
+    await User.updateOne({ _id: req.user.id }, { emergencyContacts: contacts });
+    res.json({ success: true, contacts });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
@@ -751,7 +824,9 @@ app.get('/api/payments/history', authMiddleware, adminMiddleware, async (req, re
 
 app.post('/api/sos', authMiddleware, async (req, res) => {
   try {
-    const { location, message, rideId } = req.body;
+    const { location, message, rideId, driverInfo } = req.body;
+    // Fetch user's emergency contacts for the alert
+    const userDoc = await User.findById(req.user.id).select('emergencyContacts name phone');
     const sos = await SOS.create({
       user:     req.user.id,
       location: location || { lat: 0, lng: 0 },
@@ -759,12 +834,18 @@ app.post('/api/sos', authMiddleware, async (req, res) => {
       ride:     rideId   || null
     });
     io.emit('sos:alert', {
-      userId:   req.user.id,
-      userName: req.user.name,
+      userId:            req.user.id,
+      userName:          req.user.name,
+      userPhone:         userDoc?.phone || '',
       location, message, rideId,
+      driverInfo:        driverInfo || null,
+      emergencyContacts: userDoc?.emergencyContacts || [],
       ts: new Date().toISOString()
     });
-    res.status(201).json({ success: true, sos });
+    res.status(201).json({
+      success: true, sos,
+      emergencyContacts: userDoc?.emergencyContacts || []
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
