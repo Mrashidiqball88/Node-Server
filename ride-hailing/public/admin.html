@@ -231,6 +231,7 @@ input[type=date]:focus{border-color:#f5c518}
       <div class="sb-item"        onclick="showSection('blk-pass')"     data-sec="blk-pass">    <span class="sb-icon">🚫</span> Blocked Users</div>
       <div class="sb-item"        onclick="showSection('live-rides')"   data-sec="live-rides">  <span class="sb-icon">🗺️</span> Live Rides</div>
       <div class="sb-item"        onclick="showSection('sos')"          data-sec="sos">         <span class="sb-icon">🆘</span> SOS Monitor <span class="sb-badge-count" id="sos-cnt" style="display:none">0</span></div>
+      <div class="sb-item"        onclick="showSection('pay-settings')" data-sec="pay-settings"><span class="sb-icon">⚙️</span> Payment Settings</div>
     </div>
     <div class="sb-footer">
       <div id="admin-email-lbl">—</div>
@@ -391,6 +392,84 @@ input[type=date]:focus{border-color:#f5c518}
           </div>
         </div>
         <div id="sos-list"><div class="loading-row">Loading…</div></div>
+      </div>
+
+      <!-- ════ 10. PAYMENT SETTINGS ════ -->
+      <div class="section-panel" id="sec-pay-settings">
+        <div class="sec-hdr">
+          <h2>⚙️ Payment Settings</h2>
+          <div class="sec-hdr-actions">
+            <button class="btn-refresh" onclick="loadPaymentSettings()">↻ Reload</button>
+          </div>
+        </div>
+        <p style="font-size:.8rem;color:#475569;margin-bottom:1.25rem">
+          These account details are shown to drivers in the Recharge Wallet screen. Keep them up to date.
+        </p>
+
+        <!-- JazzCash -->
+        <div style="background:#0f0f1e;border:1px solid #1e1e2e;border-radius:14px;padding:1.2rem;margin-bottom:1rem">
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.9rem">
+            <span style="font-size:1.2rem">📱</span>
+            <span style="font-size:.9rem;font-weight:700;color:#e2e8f0">JazzCash</span>
+          </div>
+          <div class="field-row">
+            <div class="field-item">
+              <div class="field-label">Account Title</div>
+              <input class="modal-input" id="jc-title" type="text" placeholder="e.g. Ali Khan">
+            </div>
+            <div class="field-item">
+              <div class="field-label">Account Number (Mobile)</div>
+              <input class="modal-input" id="jc-number" type="text" placeholder="e.g. 03001234567">
+            </div>
+          </div>
+        </div>
+
+        <!-- EasyPaisa -->
+        <div style="background:#0f0f1e;border:1px solid #1e1e2e;border-radius:14px;padding:1.2rem;margin-bottom:1rem">
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.9rem">
+            <span style="font-size:1.2rem">💚</span>
+            <span style="font-size:.9rem;font-weight:700;color:#e2e8f0">EasyPaisa</span>
+          </div>
+          <div class="field-row">
+            <div class="field-item">
+              <div class="field-label">Account Title</div>
+              <input class="modal-input" id="ep-title" type="text" placeholder="e.g. Ali Khan">
+            </div>
+            <div class="field-item">
+              <div class="field-label">Account Number (Mobile)</div>
+              <input class="modal-input" id="ep-number" type="text" placeholder="e.g. 03011234567">
+            </div>
+          </div>
+        </div>
+
+        <!-- Bank Account -->
+        <div style="background:#0f0f1e;border:1px solid #1e1e2e;border-radius:14px;padding:1.2rem;margin-bottom:1.5rem">
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.9rem">
+            <span style="font-size:1.2rem">🏦</span>
+            <span style="font-size:.9rem;font-weight:700;color:#e2e8f0">Bank Transfer</span>
+          </div>
+          <div class="field-row">
+            <div class="field-item">
+              <div class="field-label">Bank Name</div>
+              <input class="modal-input" id="bk-name" type="text" placeholder="e.g. HBL / UBL / Meezan">
+            </div>
+            <div class="field-item">
+              <div class="field-label">Account Title</div>
+              <input class="modal-input" id="bk-title" type="text" placeholder="e.g. Ali Khan">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-item" style="flex:1">
+              <div class="field-label">IBAN Number</div>
+              <input class="modal-input" id="bk-iban" type="text" placeholder="e.g. PK36SCBL0000001123456702" style="font-family:monospace;letter-spacing:.04em">
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="padding:.75rem 2rem;font-size:.9rem" onclick="savePaymentSettings()">
+          💾 Save Payment Settings
+        </button>
+        <div id="ps-feedback" style="margin-top:.75rem;font-size:.8rem;min-height:1.2em"></div>
       </div>
 
     </div><!-- /content-area -->
@@ -568,7 +647,8 @@ const SECTION_TITLES = {
   overview:'Overview Dashboard', payments:'Payments Management', drivers:'Drivers Directory',
   passengers:'Passengers Directory', 'new-requests':'New Driver Requests',
   'temp-blocked':'Temporarily Blocked Drivers', 'blk-pass':'Blocked Passengers',
-  'live-rides':'Live Rides & History', sos:'SOS Alert Monitor'
+  'live-rides':'Live Rides & History', sos:'SOS Alert Monitor',
+  'pay-settings':'Payment Settings'
 };
 function showSection(name) {
   document.querySelectorAll('.sb-item').forEach(el => el.classList.toggle('active', el.dataset.sec === name));
@@ -585,7 +665,7 @@ function showSection(name) {
     drivers: () => loadDrivers(currentDriverStatus), passengers: () => loadPassengers(currentPassStatus),
     'new-requests': loadNewRequests, 'temp-blocked': loadTempBlocked,
     'blk-pass': loadBlockedPass, 'live-rides': () => loadRides(currentRideStatus),
-    sos: () => loadSOS(currentSOSFilter)
+    sos: () => loadSOS(currentSOSFilter), 'pay-settings': loadPaymentSettings
   };
   loaders[name]?.();
 }
@@ -1029,6 +1109,43 @@ function badgeHtml(status) {
   const map = { active:'badge-active', pending:'badge-pending', suspended:'badge-suspended', blocked:'badge-blocked', approved:'badge-approved', rejected:'badge-rejected' };
   const labels = { active:'✓ Active', pending:'⏳ Pending', suspended:'⏸ Suspended', blocked:'⛔ Blocked', approved:'✓ Approved', rejected:'✕ Rejected' };
   return `<span class="badge ${map[status]||'badge-pending'}">${labels[status]||status}</span>`;
+}
+
+// ── Payment Settings ──────────────────────────────────────────────────────────
+async function loadPaymentSettings() {
+  try {
+    const s = await api('/api/admin/settings');
+    document.getElementById('jc-title').value  = s.jazzcash?.title  || '';
+    document.getElementById('jc-number').value = s.jazzcash?.number || '';
+    document.getElementById('ep-title').value  = s.easypaisa?.title  || '';
+    document.getElementById('ep-number').value = s.easypaisa?.number || '';
+    document.getElementById('bk-name').value   = s.bank?.name  || '';
+    document.getElementById('bk-title').value  = s.bank?.title || '';
+    document.getElementById('bk-iban').value   = s.bank?.iban  || '';
+    document.getElementById('ps-feedback').textContent = '';
+  } catch (e) {
+    document.getElementById('ps-feedback').textContent = '⚠ ' + e.message;
+    document.getElementById('ps-feedback').style.color = '#ef4444';
+  }
+}
+
+async function savePaymentSettings() {
+  const fb = document.getElementById('ps-feedback');
+  fb.textContent = 'Saving…'; fb.style.color = '#475569';
+  try {
+    await api('/api/admin/settings', 'PATCH', {
+      jazzcash:  { title: document.getElementById('jc-title').value.trim(),  number: document.getElementById('jc-number').value.trim() },
+      easypaisa: { title: document.getElementById('ep-title').value.trim(),  number: document.getElementById('ep-number').value.trim() },
+      bank:      { name:  document.getElementById('bk-name').value.trim(),   title:  document.getElementById('bk-title').value.trim(), iban: document.getElementById('bk-iban').value.trim() }
+    });
+    fb.textContent = '✓ Settings saved successfully! Drivers will see the updated accounts immediately.';
+    fb.style.color = '#22c55e';
+    showToast('Payment settings saved ✓', 'success');
+  } catch (e) {
+    fb.textContent = '✕ ' + e.message;
+    fb.style.color = '#ef4444';
+    showToast(e.message, 'error');
+  }
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────

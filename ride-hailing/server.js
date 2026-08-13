@@ -156,6 +156,7 @@ const paymentSchema = new mongoose.Schema({
   trxId:           { type: String, required: true, trim: true },
   amount:          { type: Number, required: true },
   vehicleCategory: { type: String, required: true },
+  paymentType:     { type: String, enum: ['jazzcash','easypaisa','bank'], default: 'jazzcash' },
   status:          { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   adminNote:       { type: String, default: '' },
   submittedDate:   { type: String, required: true }   // 'YYYY-MM-DD' UTC date, for uniqueness check
@@ -164,11 +165,18 @@ const paymentSchema = new mongoose.Schema({
 // One TRX submission per driver per calendar day
 paymentSchema.index({ driver: 1, submittedDate: 1 }, { unique: true });
 
-const User    = mongoose.model('User',    userSchema);
-const Ride    = mongoose.model('Ride',    rideSchema);
-const Wallet  = mongoose.model('Wallet',  walletSchema);
-const SOS     = mongoose.model('SOS',     sosSchema);
-const Payment = mongoose.model('Payment', paymentSchema);
+// Key-value settings store
+const settingsSchema = new mongoose.Schema({
+  key:   { type: String, required: true, unique: true },
+  value: { type: mongoose.Schema.Types.Mixed, default: {} }
+}, { timestamps: true });
+
+const User     = mongoose.model('User',     userSchema);
+const Ride     = mongoose.model('Ride',     rideSchema);
+const Wallet   = mongoose.model('Wallet',   walletSchema);
+const SOS      = mongoose.model('SOS',      sosSchema);
+const Payment  = mongoose.model('Payment',  paymentSchema);
+const Settings = mongoose.model('Settings', settingsSchema);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth Middleware
@@ -701,7 +709,7 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
     if (req.user.role !== 'driver') {
       return res.status(403).json({ error: 'Only drivers can submit payments' });
     }
-    const { trxId, amount } = req.body;
+    const { trxId, amount, paymentType } = req.body;
     if (!trxId || !trxId.trim()) {
       return res.status(400).json({ error: 'TRX ID is required' });
     }
@@ -719,10 +727,12 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
       return res.status(409).json({ error: 'You have already submitted a payment for today. Wait for admin review before resubmitting.' });
     }
 
+    const validTypes = ['jazzcash', 'easypaisa', 'bank'];
     const payment = await Payment.create({
       driver:          req.user.id,
       trxId:           trxId.trim(),
       amount:          Number(amount),
+      paymentType:     validTypes.includes(paymentType) ? paymentType : 'jazzcash',
       vehicleCategory: driver.vehicleType || 'Car Mini',
       submittedDate:   dateStr
     });
@@ -1106,6 +1116,44 @@ app.patch('/api/admin/payments/:id/reject', adminJwt, async (req, res) => {
     await payment.save();
     io.to(`user:${payment.driver}`).emit('payment:rejected', { reason: reason || 'Rejected' });
     res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/settings/payment — public: drivers/customers read admin account numbers
+app.get('/api/settings/payment', async (req, res) => {
+  try {
+    const doc = await Settings.findOne({ key: 'payment_accounts' });
+    res.json(doc?.value || { jazzcash: { title: '', number: '' }, easypaisa: { title: '', number: '' }, bank: { name: '', title: '', iban: '' } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/settings — admin: read all settings
+app.get('/api/admin/settings', adminJwt, async (req, res) => {
+  try {
+    const doc = await Settings.findOne({ key: 'payment_accounts' });
+    res.json(doc?.value || { jazzcash: { title: '', number: '' }, easypaisa: { title: '', number: '' }, bank: { name: '', title: '', iban: '' } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/admin/settings — admin: save payment account details
+app.patch('/api/admin/settings', adminJwt, async (req, res) => {
+  try {
+    const { jazzcash, easypaisa, bank } = req.body;
+    const value = {
+      jazzcash:  { title: jazzcash?.title  || '', number: jazzcash?.number || '' },
+      easypaisa: { title: easypaisa?.title || '', number: easypaisa?.number || '' },
+      bank:      { name:  bank?.name  || '', title: bank?.title || '', iban: bank?.iban || '' }
+    };
+    await Settings.findOneAndUpdate(
+      { key: 'payment_accounts' },
+      { key: 'payment_accounts', value },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    res.json({ success: true, value });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

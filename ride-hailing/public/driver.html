@@ -165,6 +165,29 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .leaflet-container{background:#1a1a2a}
 .pickup-icon{background:#2266cc;border:3px solid #fff;width:16px;height:16px;border-radius:50%}
 .dropoff-icon{background:#cc6622;border:3px solid #fff;width:16px;height:16px;border-radius:50%}
+
+/* ── Payment Accounts ── */
+.pay-accounts-section{background:#0a0a0f;border:1px solid #222;border-radius:12px;padding:.85rem;margin-bottom:.75rem}
+.pay-accounts-title{font-size:.78rem;color:#f5c518;font-weight:700;margin-bottom:.65rem;display:flex;align-items:center;gap:.4rem}
+.pay-account-card{background:#13131a;border:1px solid #2a2a38;border-radius:10px;padding:.7rem .85rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem}
+.pay-account-card:last-child{margin-bottom:0}
+.pay-account-icon{font-size:1.3rem;flex-shrink:0;width:32px;text-align:center}
+.pay-account-info{flex:1;min-width:0}
+.pay-account-name{font-size:.82rem;font-weight:700;color:#e2e8f0;margin-bottom:.15rem}
+.pay-account-title{font-size:.72rem;color:#888;margin-bottom:.2rem}
+.pay-account-number{font-size:.85rem;color:#f5c518;font-family:monospace;font-weight:600;word-break:break-all}
+.pay-account-iban{font-size:.75rem;color:#aaa;font-family:monospace;word-break:break-all}
+.btn-copy{background:#1a1a28;border:1px solid #333;color:#aaa;border-radius:8px;padding:.35rem .6rem;font-size:.68rem;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.btn-copy:hover{border-color:#f5c518;color:#f5c518}
+.btn-copy.copied{background:#1a3a1a;border-color:#4caf50;color:#4caf50}
+.pay-accounts-empty{font-size:.78rem;color:#555;text-align:center;padding:.5rem}
+.pay-type-selector{display:flex;gap:.5rem;margin-bottom:.6rem;flex-wrap:wrap}
+.pay-type-btn{flex:1;min-width:90px;background:#13131a;border:1px solid #2a2a38;border-radius:8px;padding:.5rem .4rem;font-size:.78rem;font-weight:600;color:#666;cursor:pointer;text-align:center;transition:all .2s}
+.pay-type-btn.active{background:#1a1500;border-color:#f5c518;color:#f5c518}
+.pay-type-btn:hover:not(.active){border-color:#444;color:#aaa}
+.trx-screenshot-label{font-size:.72rem;color:#666;margin-bottom:.3rem;display:block}
+.trx-screenshot-input{width:100%;background:#13131a;border:1px dashed #333;border-radius:8px;padding:.55rem;color:#888;font-size:.8rem;cursor:pointer}
+.trx-screenshot-input::-webkit-file-upload-button{background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:.25rem .6rem;font-size:.75rem;cursor:pointer}
 </style>
 </head>
 <body>
@@ -285,12 +308,31 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <div class="ws-progress"><div class="ws-progress-fill" id="ws-progress-fill" style="width:0%"></div></div>
     </div>
 
+    <!-- Admin Payment Accounts (loaded dynamically) -->
+    <div class="pay-accounts-section" id="pay-accounts-section">
+      <div class="pay-accounts-title">📋 Send Payment To</div>
+      <div id="pay-accounts-list"><div class="pay-accounts-empty">Loading accounts…</div></div>
+    </div>
+
     <!-- TRX Submission Form -->
     <div class="trx-form" id="trx-form-section">
-      <div class="trx-form-title">📤 Submit Today's TRX Payment</div>
+      <div class="trx-form-title">📤 Submit Today's Payment</div>
       <div class="trx-inputs">
-        <input class="trx-input" id="trx-id-input" type="text" placeholder="TRX Transaction ID (e.g. abc123xyz…)">
+        <!-- Payment Type Selector -->
+        <div>
+          <div style="font-size:.72rem;color:#666;margin-bottom:.4rem;font-weight:600">PAYMENT METHOD</div>
+          <div class="pay-type-selector" id="pay-type-selector">
+            <div class="pay-type-btn active" data-type="jazzcash" onclick="selectPayType(this)">📱 JazzCash</div>
+            <div class="pay-type-btn" data-type="easypaisa" onclick="selectPayType(this)">💚 EasyPaisa</div>
+            <div class="pay-type-btn" data-type="bank" onclick="selectPayType(this)">🏦 Bank</div>
+          </div>
+        </div>
+        <input class="trx-input" id="trx-id-input" type="text" placeholder="TRX / Reference ID (e.g. T20240801ABCD…)">
         <input class="trx-input" id="trx-amount-input" type="number" min="1" placeholder="Amount paid (PKR)">
+        <div>
+          <span class="trx-screenshot-label">📸 Screenshot (optional)</span>
+          <input class="trx-screenshot-input" id="trx-screenshot" type="file" accept="image/*">
+        </div>
         <button class="btn-submit-trx" id="submit-trx-btn" onclick="submitTrxPayment()">Submit Payment</button>
       </div>
       <div style="font-size:.72rem;color:#555;margin-top:.5rem">One submission allowed per day. Wait for admin approval.</div>
@@ -790,7 +832,82 @@ function switchBottomTab(tab) {
 
 // ── Payments ───────────────────────────────────────────────────────────────
 async function loadPayments() {
-  await Promise.all([loadWalletStatus(), loadPaymentHistory()]);
+  await Promise.all([loadWalletStatus(), loadPaymentHistory(), loadAdminPaymentAccounts()]);
+}
+
+// Load admin-configured payment accounts and render them
+async function loadAdminPaymentAccounts() {
+  const el = document.getElementById('pay-accounts-list');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/settings/payment');
+    const accts = await r.json();
+    const cards = [];
+
+    if (accts.jazzcash?.number) {
+      cards.push(`<div class="pay-account-card">
+        <div class="pay-account-icon">📱</div>
+        <div class="pay-account-info">
+          <div class="pay-account-name">JazzCash</div>
+          ${accts.jazzcash.title ? `<div class="pay-account-title">${accts.jazzcash.title}</div>` : ''}
+          <div class="pay-account-number">${accts.jazzcash.number}</div>
+        </div>
+        <button class="btn-copy" onclick="copyNum(this,'${accts.jazzcash.number}')">📋 Copy</button>
+      </div>`);
+    }
+    if (accts.easypaisa?.number) {
+      cards.push(`<div class="pay-account-card">
+        <div class="pay-account-icon">💚</div>
+        <div class="pay-account-info">
+          <div class="pay-account-name">EasyPaisa</div>
+          ${accts.easypaisa.title ? `<div class="pay-account-title">${accts.easypaisa.title}</div>` : ''}
+          <div class="pay-account-number">${accts.easypaisa.number}</div>
+        </div>
+        <button class="btn-copy" onclick="copyNum(this,'${accts.easypaisa.number}')">📋 Copy</button>
+      </div>`);
+    }
+    if (accts.bank?.iban) {
+      cards.push(`<div class="pay-account-card">
+        <div class="pay-account-icon">🏦</div>
+        <div class="pay-account-info">
+          <div class="pay-account-name">${accts.bank.name || 'Bank Transfer'}</div>
+          ${accts.bank.title ? `<div class="pay-account-title">${accts.bank.title}</div>` : ''}
+          <div class="pay-account-iban">IBAN: ${accts.bank.iban}</div>
+        </div>
+        <button class="btn-copy" onclick="copyNum(this,'${accts.bank.iban}')">📋 Copy</button>
+      </div>`);
+    }
+
+    el.innerHTML = cards.length
+      ? cards.join('')
+      : '<div class="pay-accounts-empty">No payment accounts configured yet. Contact admin.</div>';
+  } catch {
+    el.innerHTML = '<div class="pay-accounts-empty">Could not load payment accounts.</div>';
+  }
+}
+
+function copyNum(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    // Fallback for non-https
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+let selectedPayType = 'jazzcash';
+function selectPayType(el) {
+  document.querySelectorAll('.pay-type-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  selectedPayType = el.dataset.type;
 }
 
 async function loadWalletStatus() {
@@ -852,17 +969,23 @@ async function loadPaymentHistory() {
 async function submitTrxPayment() {
   const trxId  = document.getElementById('trx-id-input').value.trim();
   const amount = document.getElementById('trx-amount-input').value;
-  if (!trxId)  return showToast('Enter a TRX ID', 'error');
+  if (!trxId)  return showToast('Enter a TRX / Reference ID', 'error');
   if (!amount || Number(amount) <= 0) return showToast('Enter a valid amount', 'error');
 
   const btn = document.getElementById('submit-trx-btn');
   btn.disabled = true;
   btn.textContent = 'Submitting…';
   try {
-    await apiCall('/api/payments/submit', 'POST', { trxId, amount: Number(amount) });
+    await apiCall('/api/payments/submit', 'POST', {
+      trxId,
+      amount:      Number(amount),
+      paymentType: selectedPayType || 'jazzcash'
+    });
     showToast('Payment submitted! Awaiting admin approval.', 'success');
-    document.getElementById('trx-id-input').value    = '';
+    document.getElementById('trx-id-input').value     = '';
     document.getElementById('trx-amount-input').value = '';
+    const ss = document.getElementById('trx-screenshot');
+    if (ss) ss.value = '';
     await loadPayments();
   } catch (e) {
     showToast(e.message, 'error');
