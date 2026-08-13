@@ -1,23 +1,38 @@
+run = "cd artifacts/mockup-sandbox && npm run dev"
 modules = ["nodejs-24"]
 
-[deployment]
-router = "application"
-deploymentTarget = "autoscale"
+[[ports]]
+localPort = 3000
+externalPort = 3001
 
-[deployment.postBuild]
-args = ["pnpm", "store", "prune"]
-env = { "CI" = "true" }
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3000
 
 [workflows]
 runButton = "Project"
 
-[agent]
-stack = "PNPM_WORKSPACE"
-expertMode = true
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
 
-[postMerge]
-path = "scripts/post-merge.sh"
-timeoutMs = 20000
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Ride-Hailing App"
 
-[nix]
-channel = "stable-25_05"
+[[workflows.workflow]]
+name = "Ride-Hailing App"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd ride-hailing && node server.js"
+waitForPort = 3000
+
+[workflows.workflow.metadata]
+outputType = "console"

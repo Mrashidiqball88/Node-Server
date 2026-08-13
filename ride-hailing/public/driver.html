@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RideSwift — Driver</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── Auth ── */
+#auth-screen{position:fixed;inset:0;z-index:1000;background:#0a0a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem}
+.auth-logo{font-size:2rem;font-weight:800;margin-bottom:.25rem}.auth-logo span{color:#f5c518}
+.auth-subtitle{color:#555;font-size:.85rem;margin-bottom:2rem}
+.auth-card{background:#13131a;border:1px solid #222;border-radius:20px;padding:1.5rem;width:100%;max-width:360px}
+.auth-tabs{display:flex;gap:.5rem;margin-bottom:1.5rem;background:#0a0a0f;border-radius:10px;padding:.25rem}
+.auth-tab{flex:1;padding:.6rem;border:none;background:transparent;color:#666;border-radius:8px;font-size:.9rem;cursor:pointer;transition:all .2s}
+.auth-tab.active{background:#1e3a5f;color:#fff;font-weight:700}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:.8rem;color:#888;margin-bottom:.4rem}
+.form-group input,.form-group select{width:100%;background:#0a0a0f;border:1px solid #333;border-radius:10px;padding:.75rem 1rem;color:#fff;font-size:.95rem;outline:none;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{border-color:#1e6fb4}
+.form-group select option{background:#13131a}
+.btn-primary{width:100%;background:#1e3a5f;color:#fff;border:none;border-radius:12px;padding:.85rem;font-size:1rem;font-weight:700;cursor:pointer;margin-top:.5rem;transition:background .2s}
+.btn-primary:hover{background:#2a4f7f}
+.auth-error{color:#ff5555;font-size:.85rem;text-align:center;margin-top:.75rem;min-height:1.2em}
+
+/* ── App Layout ── */
+#app{display:none;flex-direction:column;height:100dvh}
+#map{flex:1;z-index:1}
+
+/* ── Header ── */
+.header{background:#0d1117;border-bottom:1px solid #1e3a5f;padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;z-index:10;flex-shrink:0}
+.header-logo{font-size:1.1rem;font-weight:800}.header-logo span{color:#f5c518}
+.header-right{display:flex;align-items:center;gap:.75rem}
+.earnings-badge{background:#1a2a0a;border:1px solid #2d5a2d;border-radius:100px;padding:.3rem .75rem;font-size:.8rem;color:#4caf50;font-weight:600}
+.btn-logout{background:none;border:1px solid #333;color:#888;border-radius:8px;padding:.3rem .6rem;font-size:.7rem;cursor:pointer}
+
+/* ── Online Toggle ── */
+.online-bar{background:#0d1117;border-bottom:1px solid #1a1a2a;padding:.75rem 1rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.online-info{display:flex;flex-direction:column}
+.online-status-text{font-size:.95rem;font-weight:600}
+.online-sub{font-size:.75rem;color:#555;margin-top:.1rem}
+.toggle-wrap{position:relative;width:60px;height:30px}
+.toggle-input{opacity:0;width:0;height:0;position:absolute}
+.toggle-label{position:absolute;inset:0;background:#333;border-radius:30px;cursor:pointer;transition:background .3s}
+.toggle-label::after{content:'';position:absolute;width:22px;height:22px;left:4px;top:4px;background:#fff;border-radius:50%;transition:transform .3s}
+.toggle-input:checked+.toggle-label{background:#4caf50}
+.toggle-input:checked+.toggle-label::after{transform:translateX(30px)}
+
+/* ── Bottom Info Panel ── */
+#info-panel{background:#0d1117;border-top:1px solid #1e3a5f;padding:1rem;flex-shrink:0;max-height:45vh;overflow-y:auto}
+.idle-msg{text-align:center;color:#444;padding:1.5rem;font-size:.9rem}
+.idle-msg .idle-icon{font-size:2.5rem;margin-bottom:.5rem}
+
+/* ── Incoming Ride Popup ── */
+#ride-request{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:#0d1117;border-top:2px solid #f5c518;padding:1rem;animation:slide-up .3s ease}
+@keyframes slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.rr-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem}
+.rr-title{font-size:1rem;font-weight:700;color:#f5c518}
+.rr-timer{background:#2a1a0a;border:1px solid #cc6622;border-radius:100px;padding:.2rem .6rem;font-size:.8rem;color:#ff9933;font-weight:600}
+.rr-route{background:#0a0a0f;border-radius:12px;padding:.75rem;margin-bottom:.75rem}
+.rr-point{display:flex;align-items:flex-start;gap:.6rem;padding:.3rem 0}
+.rr-point-icon{font-size:1rem;width:20px;text-align:center;flex-shrink:0;margin-top:.1rem}
+.rr-point-text{font-size:.85rem;color:#ccc;line-height:1.3}
+.rr-divider{border-left:1px dashed #333;height:12px;margin-left:9px}
+.rr-meta{display:flex;gap:.75rem;margin-bottom.75rem;margin-bottom:.75rem}
+.rr-meta-item{flex:1;background:#0a0a0f;border-radius:10px;padding:.6rem;text-align:center}
+.rr-meta-label{font-size:.7rem;color:#666;margin-bottom:.2rem}
+.rr-meta-val{font-size:1rem;font-weight:700;color:#f5c518}
+.rr-actions{display:flex;gap:.75rem}
+.btn-reject{flex:1;background:#2a0a0a;border:1px solid #cc3333;color:#ff6666;border-radius:12px;padding:.75rem;font-size:.95rem;font-weight:600;cursor:pointer}
+.btn-accept{flex:1;background:#1e3a5f;border:1px solid #4488cc;color:#fff;border-radius:12px;padding:.75rem;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s}
+.btn-accept:hover{background:#2a4f7f}
+
+/* ── Active Ride Panel ── */
+#active-panel{display:none;background:#0d1117;border-top:1px solid #1e3a5f;padding:1rem;flex-shrink:0}
+.ap-status{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem}
+.ap-status-dot{width:8px;height:8px;background:#4caf50;border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.ap-status-text{font-size:.9rem;font-weight:600;color:#4caf50}
+.ap-passenger{background:#0a0a0f;border-radius:12px;padding:.75rem;margin-bottom:.75rem}
+.ap-passenger-name{font-size:1rem;font-weight:600;margin-bottom:.2rem}
+.ap-passenger-sub{font-size:.8rem;color:#666}
+.ap-route{background:#0a0a0f;border-radius:12px;padding:.75rem;margin-bottom:.75rem}
+.ap-route-row{display:flex;align-items:center;gap:.5rem;font-size:.85rem;padding:.25rem 0;color:#ccc}
+.ap-status-btns{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.ap-btn{border:none;border-radius:10px;padding:.7rem;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s}
+.ap-btn.arrived{background:#1a2a3a;color:#66aaff;border:1px solid #336699}
+.ap-btn.start{background:#1a3a1a;color:#4caf50;border:1px solid #2d5a2d}
+.ap-btn.complete{background:#1a3a0a;color:#66cc44;border:1px solid #3d7a1a;grid-column:1/-1}
+.ap-btn.cancel{background:#2a0a0a;color:#ff6666;border:1px solid #cc3333;grid-column:1/-1}
+
+/* ── Stats strip ── */
+.stats-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;padding:.75rem 1rem;background:#0d1117;border-top:1px solid #1a1a2a;flex-shrink:0}
+.stat-item{text-align:center}
+.stat-val{font-size:1rem;font-weight:700;color:#f5c518}
+.stat-label{font-size:.65rem;color:#555;margin-top:.15rem}
+
+/* ── Toast ── */
+.toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#222;border-radius:10px;padding:.6rem 1.2rem;font-size:.85rem;z-index:9999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap}
+.toast.show{opacity:1}
+.toast.success{border-left:3px solid #4caf50}
+.toast.error{border-left:3px solid #ff5555}
+.toast.info{border-left:3px solid #f5c518}
+
+.leaflet-container{background:#1a1a2a}
+.pickup-icon{background:#2266cc;border:3px solid #fff;width:16px;height:16px;border-radius:50%}
+.dropoff-icon{background:#cc6622;border:3px solid #fff;width:16px;height:16px;border-radius:50%}
+</style>
+</head>
+<body>
+
+<!-- ── AUTH ── -->
+<div id="auth-screen">
+  <div class="auth-logo">Ride<span>Swift</span></div>
+  <p class="auth-subtitle">Driver Portal</p>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <div id="login-form">
+      <div class="form-group"><label>Email</label><input type="email" id="l-email" placeholder="driver@email.com"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••"></div>
+      <button class="btn-primary" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <div id="register-form" style="display:none">
+      <div class="form-group"><label>Full Name</label><input type="text" id="r-name" placeholder="Driver name"></div>
+      <div class="form-group"><label>Email</label><input type="email" id="r-email" placeholder="driver@email.com"></div>
+      <div class="form-group"><label>Phone</label><input type="tel" id="r-phone" placeholder="+92 300 0000000"></div>
+      <div class="form-group">
+        <label>Vehicle Type</label>
+        <select id="r-vehicle">
+          <option value="Bike">🛵 Bike</option>
+          <option value="Rickshaw">🛺 Rickshaw</option>
+          <option value="Car Mini" selected>🚙 Car Mini</option>
+          <option value="Car AC">🚗 Car AC (with AC)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Password</label><input type="password" id="r-pass" placeholder="••••••••"></div>
+      <button class="btn-primary" onclick="doRegister()">Create Driver Account</button>
+    </div>
+
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<!-- ── APP ── -->
+<div id="app">
+  <div class="header">
+    <div class="header-logo">Ride<span>Swift</span> <span style="font-size:.7rem;color:#555;font-weight:400">Driver</span></div>
+    <div class="header-right">
+      <div class="earnings-badge">💰 Rs <span id="earnings-val">0</span></div>
+      <button class="btn-logout" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- Online Toggle -->
+  <div class="online-bar">
+    <div class="online-info">
+      <div class="online-status-text" id="status-text">You are Offline</div>
+      <div class="online-sub" id="status-sub">Toggle to go online and receive ride requests</div>
+    </div>
+    <div class="toggle-wrap">
+      <input type="checkbox" id="online-toggle" class="toggle-input" onchange="toggleOnline(this.checked)">
+      <label for="online-toggle" class="toggle-label"></label>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Stats strip -->
+  <div class="stats-strip">
+    <div class="stat-item"><div class="stat-val" id="stat-rides">0</div><div class="stat-label">Today's Rides</div></div>
+    <div class="stat-item"><div class="stat-val" id="stat-earning">Rs 0</div><div class="stat-label">Earnings</div></div>
+    <div class="stat-item"><div class="stat-val" id="stat-rating">5.0 ⭐</div><div class="stat-label">Rating</div></div>
+  </div>
+
+  <!-- Info Panel (idle) -->
+  <div id="info-panel">
+    <div class="idle-msg" id="idle-msg">
+      <div class="idle-icon">🛑</div>
+      <div>Toggle <strong>Online</strong> above to start receiving ride requests</div>
+    </div>
+  </div>
+
+  <!-- Active Ride Panel -->
+  <div id="active-panel">
+    <div class="ap-status"><span class="ap-status-dot"></span><span class="ap-status-text" id="ap-status-text">Ride Accepted</span></div>
+    <div class="ap-passenger">
+      <div class="ap-passenger-name" id="ap-passenger-name">Passenger</div>
+      <div class="ap-passenger-sub">📍 Pickup → 🎯 Dropoff</div>
+    </div>
+    <div class="ap-route">
+      <div class="ap-route-row">📍 <span id="ap-pickup">—</span></div>
+      <div class="ap-route-row">🎯 <span id="ap-dropoff">—</span></div>
+    </div>
+    <div class="ap-status-btns" id="ap-btns"></div>
+  </div>
+</div>
+
+<!-- Incoming Ride Request Popup -->
+<div id="ride-request">
+  <div class="rr-header">
+    <span class="rr-title">🚗 New Ride Request</span>
+    <span class="rr-timer" id="rr-timer">30s</span>
+  </div>
+  <div class="rr-route">
+    <div class="rr-point"><span class="rr-point-icon">📍</span><span class="rr-point-text" id="rr-pickup">—</span></div>
+    <div class="rr-divider"></div>
+    <div class="rr-point"><span class="rr-point-icon">🎯</span><span class="rr-point-text" id="rr-dropoff">—</span></div>
+  </div>
+  <div class="rr-meta">
+    <div class="rr-meta-item"><div class="rr-meta-label">Fare</div><div class="rr-meta-val" id="rr-fare">—</div></div>
+    <div class="rr-meta-item"><div class="rr-meta-label">Distance</div><div class="rr-meta-val" id="rr-dist">—</div></div>
+    <div class="rr-meta-item"><div class="rr-meta-label">Vehicle</div><div class="rr-meta-val" id="rr-vehicle">—</div></div>
+  </div>
+  <div class="rr-actions">
+    <button class="btn-reject" onclick="rejectRide()">✗ Reject</button>
+    <button class="btn-accept" onclick="acceptRide()">✓ Accept</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let token  = localStorage.getItem('rh_token');
+let user   = JSON.parse(localStorage.getItem('rh_user') || 'null');
+let socket = null;
+let map, pickupMarker, dropoffMarker, routeLine, myMarker;
+let isOnline      = false;
+let pendingRide   = null;   // current popup ride
+let activeRide    = null;   // accepted ride
+let requestTimer  = null;
+let locationWatch = null;
+let todayRides    = 0;
+let todayEarnings = 0;
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast ${type} show`;
+  setTimeout(() => el.className = 'toast', 3000);
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+function switchTab(t) {
+  document.getElementById('login-form').style.display    = t === 'login'    ? 'block' : 'none';
+  document.getElementById('register-form').style.display = t === 'register' ? 'block' : 'none';
+  document.querySelectorAll('.auth-tab').forEach((b, i) => b.classList.toggle('active', (i === 0) === (t === 'login')));
+  document.getElementById('auth-error').textContent = '';
+}
+
+async function apiCall(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Request failed');
+  return d;
+}
+
+async function doLogin() {
+  const email = document.getElementById('l-email').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  try {
+    const res = await apiCall('/api/auth/login', 'POST', { email, password: pass });
+    if (res.user.role !== 'driver') throw new Error('Please use a driver account. Register as driver.');
+    saveSession(res);
+  } catch (e) { document.getElementById('auth-error').textContent = e.message; }
+}
+
+async function doRegister() {
+  const name    = document.getElementById('r-name').value.trim();
+  const email   = document.getElementById('r-email').value.trim();
+  const phone   = document.getElementById('r-phone').value.trim();
+  const vehicle = document.getElementById('r-vehicle').value;
+  const pass    = document.getElementById('r-pass').value;
+  try {
+    const res = await apiCall('/api/auth/register', 'POST', { name, email, phone, password: pass, role: 'driver', vehicleType: vehicle });
+    saveSession(res);
+  } catch (e) { document.getElementById('auth-error').textContent = e.message; }
+}
+
+function saveSession(res) {
+  token = res.token; user = res.user;
+  localStorage.setItem('rh_token', token);
+  localStorage.setItem('rh_user', JSON.stringify(user));
+  bootApp();
+}
+
+function doLogout() {
+  if (socket) { socket.emit('driver:status', { isOnline: false }); socket.disconnect(); }
+  if (locationWatch) navigator.geolocation.clearWatch(locationWatch);
+  localStorage.clear();
+  token = null; user = null;
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+function bootApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  initMap();
+  connectSocket();
+  loadStats();
+}
+
+// ── Map ────────────────────────────────────────────────────────────────────
+function initMap() {
+  if (map) return;
+  map = L.map('map', { zoomControl: false }).setView([31.5204, 74.3587], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+
+  // Watch driver's own location
+  if (navigator.geolocation) {
+    locationWatch = navigator.geolocation.watchPosition(pos => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      map.setView([lat, lng], map.getZoom());
+      if (myMarker) myMarker.setLatLng([lat, lng]);
+      else myMarker = L.marker([lat, lng], {
+        icon: L.divIcon({ html: '📍', className: '', iconSize: [28, 28], iconAnchor: [14, 28] })
+      }).addTo(map);
+
+      if (socket && isOnline) {
+        socket.emit('driver:location', { lat, lng, rideId: activeRide?._id });
+      }
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 3000 });
+
+    navigator.geolocation.getCurrentPosition(pos => {
+      map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+    }, () => {});
+  }
+}
+
+function showRideOnMap(ride) {
+  if (pickupMarker)  pickupMarker.remove();
+  if (dropoffMarker) dropoffMarker.remove();
+  if (routeLine)     routeLine.remove();
+
+  const { pickupLocation: p, dropoffLocation: d } = ride;
+  pickupMarker  = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pickup-icon', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(map);
+  dropoffMarker = L.marker([d.lat, d.lng], { icon: L.divIcon({ className: 'dropoff-icon', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(map);
+  routeLine = L.polyline([[p.lat, p.lng], [d.lat, d.lng]], { color: '#f5c518', weight: 3, dashArray: '8,8' }).addTo(map);
+  map.fitBounds([[p.lat, p.lng], [d.lat, d.lng]], { padding: [60, 60] });
+}
+
+function clearRideMap() {
+  if (pickupMarker)  { pickupMarker.remove();  pickupMarker  = null; }
+  if (dropoffMarker) { dropoffMarker.remove(); dropoffMarker = null; }
+  if (routeLine)     { routeLine.remove();     routeLine     = null; }
+}
+
+// ── Online Toggle ──────────────────────────────────────────────────────────
+function toggleOnline(online) {
+  isOnline = online;
+  socket?.emit('driver:status', { isOnline: online });
+  document.getElementById('status-text').textContent = online ? 'You are Online ✓' : 'You are Offline';
+  document.getElementById('status-sub').textContent  = online
+    ? 'Waiting for ride requests…'
+    : 'Toggle to go online and receive ride requests';
+  document.getElementById('idle-msg').innerHTML = online
+    ? '<div class="idle-icon">🟢</div><div>You\'re online! Waiting for ride requests near you…</div>'
+    : '<div class="idle-icon">🛑</div><div>Toggle <strong>Online</strong> above to start receiving ride requests</div>';
+  showToast(online ? 'You are now Online' : 'You went Offline', online ? 'success' : 'info');
+}
+
+// ── Socket.io ─────────────────────────────────────────────────────────────
+function connectSocket() {
+  if (socket) return;
+  socket = io({ auth: { token } });
+  socket.on('connect_error', e => console.warn('Socket error:', e.message));
+
+  // New ride request from passenger
+  socket.on('ride:new', (ride) => {
+    if (!isOnline || activeRide) return;
+    pendingRide = ride;
+    showRideRequest(ride);
+  });
+
+  // Another driver took this ride
+  socket.on('ride:taken', ({ rideId }) => {
+    if (pendingRide && pendingRide.id === String(rideId)) {
+      hideRideRequest();
+      showToast('Ride was taken by another driver', 'info');
+    }
+  });
+
+  // Ride status from passenger cancel
+  socket.on('ride:status', ({ rideId, status }) => {
+    if (activeRide && String(activeRide._id) === String(rideId)) {
+      if (status === 'cancelled') {
+        showToast('Passenger cancelled the ride', 'error');
+        endActiveRide();
+      }
+    }
+  });
+}
+
+// ── Ride Request Popup ─────────────────────────────────────────────────────
+function showRideRequest(ride) {
+  document.getElementById('rr-pickup').textContent  = ride.pickupLocation?.address  || `${ride.pickupLocation?.lat?.toFixed(4)}, ${ride.pickupLocation?.lng?.toFixed(4)}`;
+  document.getElementById('rr-dropoff').textContent = ride.dropoffLocation?.address || `${ride.dropoffLocation?.lat?.toFixed(4)}, ${ride.dropoffLocation?.lng?.toFixed(4)}`;
+  document.getElementById('rr-fare').textContent    = `Rs ${ride.fare}`;
+  document.getElementById('rr-dist').textContent    = ride.distance ? `${ride.distance.toFixed(1)} km` : '—';
+  document.getElementById('rr-vehicle').textContent = ride.vehicleType || '—';
+  document.getElementById('ride-request').style.display = 'block';
+
+  // 30-second timer
+  let secs = 30;
+  document.getElementById('rr-timer').textContent = `${secs}s`;
+  clearInterval(requestTimer);
+  requestTimer = setInterval(() => {
+    secs--;
+    document.getElementById('rr-timer').textContent = `${secs}s`;
+    if (secs <= 0) { clearInterval(requestTimer); hideRideRequest(); }
+  }, 1000);
+
+  showRideOnMap(ride);
+}
+
+function hideRideRequest() {
+  document.getElementById('ride-request').style.display = 'none';
+  clearInterval(requestTimer);
+  pendingRide = null;
+}
+
+function rejectRide() {
+  hideRideRequest();
+  clearRideMap();
+  showToast('Ride rejected', 'info');
+}
+
+async function acceptRide() {
+  if (!pendingRide) return;
+  const rideId = pendingRide.id;
+  hideRideRequest();
+  try {
+    const ride = await apiCall(`/api/rides/${rideId}/accept`, 'PATCH');
+    activeRide = ride;
+    socket.emit('ride:join', ride._id);
+    showActivePanel(ride);
+    showRideOnMap(ride);
+    showToast('Ride accepted! Head to pickup.', 'success');
+  } catch (e) {
+    clearRideMap();
+    showToast(e.message, 'error');
+  }
+}
+
+// ── Active Ride Panel ──────────────────────────────────────────────────────
+function showActivePanel(ride) {
+  document.getElementById('info-panel').style.display   = 'none';
+  document.getElementById('active-panel').style.display = 'block';
+  document.getElementById('ap-status-text').textContent    = 'On the way to pickup';
+  document.getElementById('ap-passenger-name').textContent = ride.passenger?.name || 'Passenger';
+  document.getElementById('ap-pickup').textContent         = ride.pickupLocation?.address  || 'Pickup';
+  document.getElementById('ap-dropoff').textContent        = ride.dropoffLocation?.address || 'Dropoff';
+  renderActiveButtons('accepted');
+}
+
+function renderActiveButtons(status) {
+  const btns = document.getElementById('ap-btns');
+  const map = {
+    accepted: `<button class="ap-btn arrived" onclick="updateStatus('arrived')">✓ Arrived at Pickup</button>`,
+    arrived:  `<button class="ap-btn start" onclick="updateStatus('in-progress')">▶ Start Ride</button>`,
+    'in-progress': `<button class="ap-btn complete" onclick="updateStatus('completed')">🏁 Complete Ride</button>`
+  };
+  btns.innerHTML = (map[status] || '') +
+    (status !== 'in-progress' ? `<button class="ap-btn cancel" onclick="cancelActiveRide()">✗ Cancel Ride</button>` : '');
+}
+
+async function updateStatus(status) {
+  if (!activeRide) return;
+  try {
+    await apiCall(`/api/rides/${activeRide._id}/status`, 'PATCH', { status });
+    activeRide.status = status;
+    const labels = { arrived: 'Arrived at pickup!', 'in-progress': 'Ride in progress', completed: 'Ride completed!' };
+    document.getElementById('ap-status-text').textContent = labels[status] || status;
+    if (status === 'completed') {
+      todayRides++; todayEarnings += +(activeRide.fare * 0.85).toFixed(2);
+      document.getElementById('stat-rides').textContent   = todayRides;
+      document.getElementById('stat-earning').textContent = `Rs ${todayEarnings.toLocaleString()}`;
+      document.getElementById('earnings-val').textContent = todayEarnings.toLocaleString();
+      showToast('Ride completed! Great job! 🎉', 'success');
+      setTimeout(endActiveRide, 2000);
+    } else {
+      renderActiveButtons(status);
+      const msgs = { arrived: 'Marked as arrived', 'in-progress': 'Ride started' };
+      showToast(msgs[status] || '', 'success');
+    }
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function cancelActiveRide() {
+  if (!activeRide) return;
+  if (!confirm('Cancel this ride?')) return;
+  try {
+    await apiCall(`/api/rides/${activeRide._id}/cancel`, 'PATCH');
+    showToast('Ride cancelled', 'info');
+    endActiveRide();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function endActiveRide() {
+  activeRide = null;
+  document.getElementById('active-panel').style.display = 'none';
+  document.getElementById('info-panel').style.display   = 'block';
+  clearRideMap();
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const w = await apiCall('/api/wallet');
+    const bal = +(w.balance || 0);
+    document.getElementById('earnings-val').textContent  = bal.toLocaleString();
+    document.getElementById('stat-earning').textContent  = `Rs ${bal.toLocaleString()}`;
+
+    const rides = await apiCall('/api/rides/my');
+    const today = new Date().toDateString();
+    const todayCompleted = rides.filter(r => r.status === 'completed' && new Date(r.createdAt).toDateString() === today);
+    todayRides    = todayCompleted.length;
+    todayEarnings = todayCompleted.reduce((s, r) => s + r.fare * 0.85, 0);
+    document.getElementById('stat-rides').textContent   = todayRides;
+    document.getElementById('stat-rating').textContent  = (user.rating || 5.0).toFixed(1) + ' ⭐';
+  } catch {}
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+if (token && user && user.role === 'driver') bootApp();
+else if (token && user && user.role !== 'driver') {
+  localStorage.clear(); token = null; user = null;
+}
+</script>
+</body>
+</html>
