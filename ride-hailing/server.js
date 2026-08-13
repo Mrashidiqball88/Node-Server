@@ -159,7 +159,9 @@ const ticketSchema = new mongoose.Schema({
   subject:    { type: String, required: true, trim: true },
   message:    { type: String, required: true, trim: true },
   status:     { type: String, enum: ['open','resolved'], default: 'open' },
-  adminReply: { type: String, default: '' }
+  adminReply: { type: String, default: '' },
+  repliedAt:  { type: Date,    default: null },
+  readByUser: { type: Boolean, default: false }
 }, { timestamps: true });
 
 const paymentSchema = new mongoose.Schema({
@@ -1184,6 +1186,57 @@ app.patch('/api/rides/:id/review', authMiddleware, async (req, res) => {
 // Support Tickets
 // ─────────────────────────────────────────────────────────────────────────────
 
+// GET /api/support/my — user's own tickets with replies
+app.get('/api/support/my', authMiddleware, async (req, res) => {
+  try {
+    const tickets = await Ticket.find({ user: req.user.id }).sort('-createdAt').limit(50);
+    res.json(tickets);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/support/my/read — mark all replied tickets as read for this user
+app.patch('/api/support/my/read', authMiddleware, async (req, res) => {
+  try {
+    await Ticket.updateMany(
+      { user: req.user.id, adminReply: { $ne: '' }, readByUser: false },
+      { readByUser: true }
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/wallet/summary — driver's wallet balance, monthly fee, bonus credits, ledger
+app.get('/api/wallet/summary', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'driver') return res.status(403).json({ error: 'Drivers only' });
+    const driver = await User.findById(req.user.id).select('vehicleType');
+    const vehicleType = driver?.vehicleType || 'Car Mini';
+    const monthlyFee  = TRIAL_AMOUNTS[vehicleType] || 4500;
+
+    const wallet = await Wallet.findOne({ user: req.user.id });
+    const balance      = wallet?.balance || 0;
+    const transactions = wallet?.transactions || [];
+
+    // Sum all bonus/promotional credits
+    const totalBonus = transactions
+      .filter(t => t.type === 'credit' &&
+        (t.description?.toLowerCase().includes('bonus') ||
+         t.description?.toLowerCase().includes('trial') ||
+         t.description?.toLowerCase().includes('promotional')))
+      .reduce((s, t) => s + t.amount, 0);
+
+    // Recent ledger — last 40 entries newest first
+    const ledger = [...transactions].reverse().slice(0, 40).map(t => ({
+      amount: t.amount, type: t.type, description: t.description, createdAt: t.createdAt
+    }));
+
+    // Today's payment submission
+    const todayPayment = await Payment.findOne({ driver: req.user.id, submittedDate: todayUTC() });
+
+    res.json({ balance, monthlyFee, totalBonus, vehicleType, ledger, todayPayment: todayPayment || null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/support/ticket', authMiddleware, async (req, res) => {
   try {
     const { subject, message } = req.body;
@@ -1211,7 +1264,18 @@ app.get('/api/admin/support', adminJwt, async (req, res) => {
 app.patch('/api/admin/support/:id/resolve', adminJwt, async (req, res) => {
   try {
     const { adminReply } = req.body;
-    await Ticket.updateOne({ _id: req.params.id }, { status: 'resolved', adminReply: adminReply || '' });
+    const ticket = await Ticket.findById(req.params.id).select('user subject');
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    await Ticket.updateOne({ _id: req.params.id }, {
+      status: 'resolved', adminReply: adminReply || '',
+      repliedAt: new Date(), readByUser: false
+    });
+    // Push real-time notification to the user
+    if (adminReply?.trim() && ticket.user) {
+      io.to(`user:${ticket.user}`).emit('support:replied', {
+        ticketId: String(ticket._id), subject: ticket.subject, reply: adminReply
+      });
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

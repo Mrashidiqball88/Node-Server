@@ -1223,10 +1223,11 @@ async function loadSupportTickets(status = 'open') {
 }
 
 async function resolveTicket(id) {
-  const reply = prompt('Optional admin reply to the user:') || '';
+  const reply = prompt('Enter your reply to the user (required to notify them):');
+  if (reply === null) return; // cancelled
   try {
-    await api(`/api/admin/support/${id}/resolve`, 'PATCH', { adminReply: reply });
-    showToast('Ticket resolved ✓', 'success');
+    await api(`/api/admin/support/${id}/resolve`, 'PATCH', { adminReply: reply.trim() });
+    showToast(reply.trim() ? 'Ticket resolved & user notified ✓' : 'Ticket resolved ✓', 'success');
     loadSupportTickets(currentSupStatus); loadStats();
   } catch (e) { showToast(e.message, 'error'); }
 }

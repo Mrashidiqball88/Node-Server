@@ -54,9 +54,12 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .fp-otp-note{font-size:.7rem;color:#888;margin-top:.35rem}
 .btn-text-link{background:none;border:none;color:#f5c518;font-size:.8rem;cursor:pointer;text-decoration:underline;margin-top:.4rem;display:inline-block;padding:0}
 /* ── Rating & Support modals ── */
-#rating-modal.open,#support-modal.open{display:flex!important}
+#rating-modal.open,#support-modal.open,#my-tickets-modal.open{display:flex!important}
 .star-btn{background:none;border:none;font-size:1.8rem;color:#334155;cursor:pointer;transition:color .15s;line-height:1}
 .star-btn:hover,.star-btn.selected{color:#f5c518}
+/* ── Ticket badge ── */
+.cust-ticket-badge{background:#ef4444;color:#fff;border-radius:100px;font-size:.6rem;font-weight:800;padding:.1rem .4rem;min-width:16px;text-align:center;margin-left:auto}
+.dots-unread-dot{position:absolute;top:-2px;right:-2px;width:8px;height:8px;background:#ef4444;border-radius:50%;border:1px solid #0a0a0f}
 /* ── Emergency contacts modal ── */
 .ec-modal-title{font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.3rem}
 .ec-modal-note{font-size:.77rem;color:#666;margin-bottom:1rem}
@@ -323,10 +326,13 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <div class="avatar" id="avatar-init">?</div>
       <div class="header-name" id="header-name">Loading…</div>
       <div class="dots-menu-wrap">
-        <button class="btn-dots" id="dots-btn" onclick="toggleDotsMenu(event)" aria-label="Menu">⋮</button>
+        <button class="btn-dots" id="dots-btn" onclick="toggleDotsMenu(event)" aria-label="Menu" style="position:relative">⋮
+          <span class="dots-unread-dot" id="cust-unread-dot" style="display:none"></span>
+        </button>
         <div class="dots-dropdown" id="dots-dropdown" style="display:none">
           <div class="dots-item" onclick="openEmergencyContactsModal()">🆘 Emergency Contacts</div>
           <div class="dots-item" onclick="openSupportModal()">🎫 Contact Support</div>
+          <div class="dots-item" onclick="openMyTickets()">📋 My Tickets <span id="cust-ticket-badge" class="cust-ticket-badge" style="display:none">0</span></div>
           <div class="dots-item danger" onclick="doLogout()">🚪 Logout</div>
         </div>
       </div>
@@ -595,6 +601,20 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
   </div>
 </div>
 
+<!-- ── My Tickets Modal ── -->
+<div class="modal-overlay" id="my-tickets-modal" style="display:none;align-items:center" onclick="if(event.target===this)closeMyTickets()">
+  <div class="modal-card" style="max-width:380px;max-height:80vh;display:flex;flex-direction:column;padding:1.1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;flex-shrink:0">
+      <div style="font-size:.95rem;font-weight:800;color:#e2e8f0">📋 My Support Tickets</div>
+      <button onclick="closeMyTickets()" style="background:none;border:none;color:#475569;cursor:pointer;font-size:1.1rem">✕</button>
+    </div>
+    <div id="cust-tickets-list" style="overflow-y:auto;flex:1"></div>
+    <div style="flex-shrink:0;margin-top:.65rem">
+      <button onclick="closeMyTickets();openSupportModal()" style="width:100%;padding:.6rem;border-radius:8px;background:#f5c518;color:#06060e;border:none;cursor:pointer;font-size:.85rem;font-weight:800">+ New Ticket</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Support Modal ── -->
 <div class="modal-overlay" id="support-modal" style="display:none;align-items:center" onclick="if(event.target===this)closeSupportModal()">
   <div class="modal-card" style="max-width:360px">
@@ -839,6 +859,7 @@ function bootApp() {
   document.getElementById('header-name').textContent = user.name || user.phone || user.email || 'User';
   initMap(); connectSocket(); loadRideHistory();
   loadEmergencyContacts();   // pre-cache for SOS
+  checkUnreadCustTickets();  // badge for unread admin replies
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────
@@ -1358,6 +1379,15 @@ function connectSocket() {
   if (socket) return;
   socket = io({ auth: { token } });
   socket.on('connect_error', (e) => console.warn('Socket error:', e.message));
+
+  // Admin replied to a support ticket
+  socket.on('support:replied', ({ subject, reply }) => {
+    showToast(`📋 Admin replied to: "${subject}"`, 'info');
+    document.getElementById('cust-unread-dot').style.display   = 'inline-block';
+    const badge = document.getElementById('cust-ticket-badge');
+    badge.style.display = 'inline';
+    badge.textContent   = String((parseInt(badge.textContent) || 0) + 1);
+  });
 }
 
 function connectToRideRoom(rideId) {
@@ -1521,6 +1551,62 @@ async function submitRating() {
 function skipRating() {
   document.getElementById('rating-modal').classList.remove('open');
   endRide();
+}
+
+// ── My Tickets ────────────────────────────────────────────────────────────
+function openMyTickets() {
+  document.getElementById('dots-dropdown').style.display = 'none';
+  document.getElementById('my-tickets-modal').classList.add('open');
+  loadMyTickets();
+  apiCall('/api/support/my/read', 'PATCH').catch(() => {});
+  document.getElementById('cust-unread-dot').style.display    = 'none';
+  document.getElementById('cust-ticket-badge').style.display  = 'none';
+}
+function closeMyTickets() { document.getElementById('my-tickets-modal').classList.remove('open'); }
+
+async function loadMyTickets() {
+  const el = document.getElementById('cust-tickets-list');
+  el.innerHTML = '<div style="color:#475569;text-align:center;padding:1rem;font-size:.83rem">Loading…</div>';
+  try {
+    const tickets = await apiCall('/api/support/my');
+    if (!tickets.length) {
+      el.innerHTML = '<div style="color:#475569;text-align:center;padding:1rem;font-size:.83rem">No tickets yet. Tap "+ New Ticket" to submit one.</div>';
+      return;
+    }
+    el.innerHTML = tickets.map(t => {
+      const isOpen   = t.status === 'open';
+      const hasReply = t.adminReply?.trim().length > 0;
+      const isUnread = hasReply && !t.readByUser;
+      const d = new Date(t.createdAt).toLocaleDateString('en-PK', { day:'numeric', month:'short', year:'numeric' });
+      return `<div style="background:#06060e;border:1px solid ${isUnread ? '#f5c518' : '#1e1e2e'};border-radius:10px;padding:.75rem;margin-bottom:.55rem">
+        <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.3rem">
+          <span style="font-size:.82rem;font-weight:700;color:#e2e8f0;flex:1">${t.subject}</span>
+          <span style="font-size:.62rem;padding:.12rem .35rem;border-radius:4px;background:${isOpen?'#1a1a0a':'#0a1a0a'};color:${isOpen?'#f5c518':'#22c55e'};border:1px solid ${isOpen?'#2a2a10':'#0a3018'}">${isOpen?'Open':'Resolved'}</span>
+          ${isUnread ? '<span style="font-size:.6rem;background:#f5c518;color:#06060e;border-radius:4px;padding:.1rem .3rem;font-weight:800">NEW REPLY</span>' : ''}
+        </div>
+        <div style="font-size:.75rem;color:#475569">${t.message}</div>
+        ${hasReply ? `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:8px;padding:.5rem .6rem;margin-top:.4rem">
+          <div style="font-size:.63rem;color:#22c55e;font-weight:700;margin-bottom:.2rem">✉ Admin Reply</div>
+          <div style="font-size:.78rem;color:#a3a3a3">${t.adminReply}</div>
+        </div>` : '<div style="font-size:.72rem;color:#334155;margin-top:.3rem;font-style:italic">Awaiting admin response…</div>'}
+        <div style="font-size:.63rem;color:#334155;margin-top:.3rem">${d}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="color:#ef4444;text-align:center;padding:1rem;font-size:.83rem">${e.message}</div>`;
+  }
+}
+
+async function checkUnreadCustTickets() {
+  try {
+    const tickets = await apiCall('/api/support/my');
+    const unread = tickets.filter(t => t.adminReply?.trim() && !t.readByUser).length;
+    if (unread > 0) {
+      document.getElementById('cust-unread-dot').style.display   = 'inline-block';
+      document.getElementById('cust-ticket-badge').style.display = 'inline';
+      document.getElementById('cust-ticket-badge').textContent   = unread;
+    }
+  } catch {}
 }
 
 // ── Support Ticket ────────────────────────────────────────────────────────
