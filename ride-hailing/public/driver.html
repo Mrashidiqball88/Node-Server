@@ -188,6 +188,33 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .trx-screenshot-label{font-size:.72rem;color:#666;margin-bottom:.3rem;display:block}
 .trx-screenshot-input{width:100%;background:#13131a;border:1px dashed #333;border-radius:8px;padding:.55rem;color:#888;font-size:.8rem;cursor:pointer}
 .trx-screenshot-input::-webkit-file-upload-button{background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:.25rem .6rem;font-size:.75rem;cursor:pointer}
+
+/* ── Driver Avatar ── */
+.driver-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid #f5c518;vertical-align:middle;flex-shrink:0}
+.driver-avatar-init{width:34px;height:34px;border-radius:50%;background:#1e1e2a;border:2px solid #f5c518;display:inline-flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700;color:#f5c518;flex-shrink:0}
+/* ── Photo Upload ── */
+.photo-upload-group{margin-bottom:.65rem}
+.photo-upload-lbl{font-size:.72rem;color:#888;font-weight:600;display:block;margin-bottom:.3rem}
+.photo-upload-lbl .req{color:#f5c518;margin-left:.2rem}
+.photo-preview-img{width:68px;height:68px;border-radius:8px;object-fit:cover;border:2px solid #333;display:block;margin-bottom:.3rem}
+.photo-file-input{width:100%;background:#13131a;border:1px dashed #333;border-radius:8px;padding:.45rem .6rem;color:#888;font-size:.78rem;cursor:pointer}
+.photo-file-input::-webkit-file-upload-button{background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:.2rem .5rem;font-size:.72rem;cursor:pointer}
+/* ── Call Passenger ── */
+.btn-call-pass{display:block;width:100%;background:#052a10;border:1px solid #4caf50;color:#4caf50;border-radius:10px;padding:.65rem;font-size:.9rem;font-weight:700;text-align:center;text-decoration:none;margin-bottom:.5rem}
+.btn-call-pass:hover{background:#0a3a18}
+/* ── Support FAB ── */
+.support-fab{position:fixed;bottom:78px;right:10px;background:#13131a;border:1px solid #333;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.support-fab:hover{border-color:#f5c518}
+.support-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:800;display:none;align-items:center;justify-content:center;padding:1rem}
+.support-overlay.open{display:flex}
+.support-modal{background:#0f0f18;border:1px solid #2a2a38;border-radius:16px;width:100%;max-width:380px;padding:1.25rem}
+.support-modal h3{font-size:.95rem;font-weight:700;margin-bottom:.9rem;color:#e2e8f0}
+.support-input{width:100%;background:#06060e;border:1px solid #2a2a38;border-radius:8px;padding:.6rem .8rem;color:#e2e8f0;font-size:.85rem;outline:none;margin-bottom:.55rem}
+.support-input:focus{border-color:#f5c518}
+textarea.support-input{resize:vertical;min-height:85px}
+.support-modal-btns{display:flex;gap:.5rem;margin-top:.4rem}
+.btn-sup-cancel{flex:1;padding:.6rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;background:#1a1a28;color:#888;border:1px solid #333}
+.btn-sup-submit{flex:1;padding:.6rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;background:#f5c518;color:#06060e;border:none}
 </style>
 </head>
 <body>
@@ -223,6 +250,27 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       </div>
       <div class="form-group"><label>Vehicle Model</label><input type="text" id="r-vehicle-model" placeholder="e.g. Suzuki Cultus 2020"></div>
       <div class="form-group"><label>Number Plate</label><input type="text" id="r-plate" placeholder="e.g. LHR-1234" style="text-transform:uppercase"></div>
+      <!-- Photo Uploads -->
+      <div class="photo-upload-group">
+        <span class="photo-upload-lbl">Profile Photo <span class="req">*</span></span>
+        <img id="prev-profile" class="photo-preview-img" style="display:none" src="">
+        <input class="photo-file-input" type="file" id="r-profile-photo" accept="image/*" capture="user" onchange="previewPhoto(this,'prev-profile')">
+      </div>
+      <div class="photo-upload-group">
+        <span class="photo-upload-lbl">Driving License (Front) <span class="req">*</span></span>
+        <img id="prev-license" class="photo-preview-img" style="display:none" src="">
+        <input class="photo-file-input" type="file" id="r-license-photo" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-license')">
+      </div>
+      <div class="photo-upload-group">
+        <span class="photo-upload-lbl">CNIC Front <span style="color:#555;font-size:.9em">(optional)</span></span>
+        <img id="prev-cnic-f" class="photo-preview-img" style="display:none" src="">
+        <input class="photo-file-input" type="file" id="r-cnic-front" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-cnic-f')">
+      </div>
+      <div class="photo-upload-group">
+        <span class="photo-upload-lbl">CNIC Back <span style="color:#555;font-size:.9em">(optional)</span></span>
+        <img id="prev-cnic-b" class="photo-preview-img" style="display:none" src="">
+        <input class="photo-file-input" type="file" id="r-cnic-back" accept="image/*" capture="environment" onchange="previewPhoto(this,'prev-cnic-b')">
+      </div>
       <div class="form-group"><label>Password</label><input type="password" id="r-pass" placeholder="••••••••"></div>
       <button class="btn-primary" onclick="doRegister()">Create Driver Account</button>
     </div>
@@ -234,7 +282,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 <!-- ── APP ── -->
 <div id="app">
   <div class="header">
-    <div class="header-logo">My<span>Ride</span> <span style="font-size:.7rem;color:#555;font-weight:400">Driver</span></div>
+    <div class="header-logo" style="display:flex;align-items:center;gap:.5rem">
+      <div id="driver-avatar-header" class="driver-avatar-init">D</div>
+      <span>My<span style="color:#f5c518">Ride</span> <span style="font-size:.7rem;color:#555;font-weight:400">Driver</span></span>
+    </div>
     <div class="header-right">
       <div class="earnings-badge">💰 Rs <span id="earnings-val">0</span></div>
       <button class="btn-logout" onclick="doLogout()">Logout</button>
@@ -287,6 +338,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <div class="ap-passenger-name" id="ap-passenger-name">Passenger</div>
       <div class="ap-passenger-sub">📍 Pickup → 🎯 Dropoff</div>
     </div>
+    <div id="ap-call-passenger"></div>
     <div class="ap-route">
       <div class="ap-route-row">📍 <span id="ap-pickup">—</span></div>
       <div class="ap-route-row">🎯 <span id="ap-dropoff">—</span></div>
@@ -434,6 +486,34 @@ async function doLogin() {
   } catch (e) { document.getElementById('auth-error').textContent = e.message; }
 }
 
+// ── Image Compression ──────────────────────────────────────────────────────
+function compressImage(file, maxWidth = 600, quality = 0.72) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale  = Math.min(1, maxWidth / img.width);
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function previewPhoto(input, previewId) {
+  const preview = document.getElementById(previewId);
+  if (!input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
+  reader.readAsDataURL(input.files[0]);
+}
+
 async function doRegister() {
   const name         = document.getElementById('r-name').value.trim();
   const email        = document.getElementById('r-email').value.trim();
@@ -442,14 +522,33 @@ async function doRegister() {
   const vehicleModel = document.getElementById('r-vehicle-model').value.trim();
   const vehiclePlate = document.getElementById('r-plate').value.trim().toUpperCase();
   const pass         = document.getElementById('r-pass').value;
+
+  const profileFile = document.getElementById('r-profile-photo').files[0];
+  const licenseFile = document.getElementById('r-license-photo').files[0];
+  const cnicFFile   = document.getElementById('r-cnic-front').files[0];
+  const cnicBFile   = document.getElementById('r-cnic-back').files[0];
+
+  const errEl = document.getElementById('auth-error');
+  if (!profileFile) { errEl.textContent = 'Profile photo is required'; return; }
+  if (!licenseFile) { errEl.textContent = 'Driving license photo is required'; return; }
+
+  errEl.textContent = 'Uploading photos…';
   try {
+    const [profilePhoto, licensePhoto, cnicFront, cnicBack] = await Promise.all([
+      compressImage(profileFile),
+      compressImage(licenseFile),
+      cnicFFile ? compressImage(cnicFFile) : Promise.resolve(''),
+      cnicBFile ? compressImage(cnicBFile) : Promise.resolve('')
+    ]);
+    errEl.textContent = 'Creating account…';
     const res = await apiCall('/api/auth/register', 'POST', {
       name, email, phone, password: pass,
       role: 'driver', vehicleType: vehicle,
-      vehicleModel, vehiclePlate
+      vehicleModel, vehiclePlate,
+      profilePhoto, licensePhoto, cnicFront, cnicBack
     });
     saveSession(res);
-  } catch (e) { document.getElementById('auth-error').textContent = e.message; }
+  } catch (e) { errEl.textContent = e.message; }
 }
 
 function saveSession(res) {
@@ -472,6 +571,15 @@ function doLogout() {
 function bootApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  // Show driver avatar in header
+  const avatarEl = document.getElementById('driver-avatar-header');
+  if (avatarEl && user) {
+    if (user.profilePhoto) {
+      avatarEl.outerHTML = `<img id="driver-avatar-header" class="driver-avatar" src="${user.profilePhoto}" alt="${user.name}">`;
+    } else {
+      avatarEl.textContent = (user.name || 'D')[0].toUpperCase();
+    }
+  }
   initMap();
   connectSocket();
   loadStats();
@@ -483,6 +591,7 @@ function initMap() {
   map = L.map('map', { zoomControl: false }).setView([31.5204, 74.3587], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
+  setTimeout(() => map?.invalidateSize(), 300);
 
   // Watch driver's own location
   if (navigator.geolocation) {
@@ -557,6 +666,17 @@ function connectSocket() {
   if (socket) return;
   socket = io({ auth: { token } });
   socket.on('connect_error', e => console.warn('Socket error:', e.message));
+
+  // Account suspended / balance too low
+  socket.on('account:suspended', ({ reason }) => {
+    showToast(reason, 'error');
+    const toggle = document.getElementById('online-toggle');
+    if (toggle) { toggle.checked = false; isOnline = false; }
+    document.getElementById('status-text').textContent = '⚠ Cannot Go Online';
+    document.getElementById('status-sub').textContent  = reason;
+    document.getElementById('idle-msg').innerHTML =
+      `<div class="idle-icon">⚠️</div><div style="color:#ff5555;font-size:.82rem">${reason}</div>`;
+  });
 
   // New ride request from passenger
   socket.on('ride:new', (ride) => {
@@ -752,6 +872,15 @@ function showActivePanel(ride) {
   document.getElementById('ap-passenger-name').textContent = ride.passenger?.name || 'Passenger';
   document.getElementById('ap-pickup').textContent         = ride.pickupLocation?.address  || 'Pickup';
   document.getElementById('ap-dropoff').textContent        = ride.dropoffLocation?.address || 'Dropoff';
+
+  // Call Passenger button
+  const phone = ride.passenger?.phone;
+  const callEl = document.getElementById('ap-call-passenger');
+  if (callEl) {
+    callEl.innerHTML = phone
+      ? `<a class="btn-call-pass" href="tel:${phone}">📞 Call Passenger — ${phone}</a>`
+      : '';
+  }
   renderActiveButtons('accepted');
 }
 
@@ -994,6 +1123,27 @@ async function submitTrxPayment() {
   }
 }
 
+// ── Support Ticket ────────────────────────────────────────────────────────
+function openSupportModal() { document.getElementById('support-overlay').classList.add('open'); }
+function closeSupportModal() { document.getElementById('support-overlay').classList.remove('open'); }
+
+async function submitSupportTicket() {
+  const subject = document.getElementById('sup-subject').value.trim();
+  const message = document.getElementById('sup-message').value.trim();
+  if (!subject) return showToast('Enter a subject', 'error');
+  if (!message) return showToast('Enter your message', 'error');
+  const btn = document.getElementById('sup-submit-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await apiCall('/api/support/ticket', 'POST', { subject, message });
+    showToast('Support ticket submitted! We\'ll respond soon.', 'success');
+    document.getElementById('sup-subject').value = '';
+    document.getElementById('sup-message').value = '';
+    closeSupportModal();
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Send Ticket'; }
+}
+
 // ── Stats ──────────────────────────────────────────────────────────────────
 async function loadStats() {
   try {
@@ -1018,5 +1168,20 @@ else if (token && user && user.role !== 'driver') {
   localStorage.clear(); token = null; user = null;
 }
 </script>
+
+<!-- ── Support Ticket Modal ── -->
+<div class="support-overlay" id="support-overlay" onclick="if(event.target===this)closeSupportModal()">
+  <div class="support-modal">
+    <h3>🎫 Contact Support</h3>
+    <input  class="support-input" id="sup-subject" type="text"     placeholder="Subject (e.g. Payment issue, App bug…)">
+    <textarea class="support-input" id="sup-message"               placeholder="Describe your issue in detail…"></textarea>
+    <div class="support-modal-btns">
+      <button class="btn-sup-cancel" onclick="closeSupportModal()">Cancel</button>
+      <button class="btn-sup-submit" id="sup-submit-btn" onclick="submitSupportTicket()">Send Ticket</button>
+    </div>
+  </div>
+</div>
+<button class="support-fab" onclick="openSupportModal()" title="Contact Support">🎫</button>
+
 </body>
 </html>

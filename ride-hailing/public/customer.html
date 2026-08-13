@@ -53,6 +53,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .fp-otp-code{font-size:2rem;font-weight:800;letter-spacing:.25em;color:#f5c518}
 .fp-otp-note{font-size:.7rem;color:#888;margin-top:.35rem}
 .btn-text-link{background:none;border:none;color:#f5c518;font-size:.8rem;cursor:pointer;text-decoration:underline;margin-top:.4rem;display:inline-block;padding:0}
+/* ── Rating & Support modals ── */
+#rating-modal.open,#support-modal.open{display:flex!important}
+.star-btn{background:none;border:none;font-size:1.8rem;color:#334155;cursor:pointer;transition:color .15s;line-height:1}
+.star-btn:hover,.star-btn.selected{color:#f5c518}
 /* ── Emergency contacts modal ── */
 .ec-modal-title{font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.3rem}
 .ec-modal-note{font-size:.77rem;color:#666;margin-bottom:1rem}
@@ -322,6 +326,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
         <button class="btn-dots" id="dots-btn" onclick="toggleDotsMenu(event)" aria-label="Menu">⋮</button>
         <div class="dots-dropdown" id="dots-dropdown" style="display:none">
           <div class="dots-item" onclick="openEmergencyContactsModal()">🆘 Emergency Contacts</div>
+          <div class="dots-item" onclick="openSupportModal()">🎫 Contact Support</div>
           <div class="dots-item danger" onclick="doLogout()">🚪 Logout</div>
         </div>
       </div>
@@ -568,6 +573,40 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ── Rating Modal ── -->
+<div class="modal-overlay" id="rating-modal" style="display:none;align-items:center" onclick="if(event.target===this)skipRating()">
+  <div class="modal-card" style="text-align:center;max-width:320px">
+    <div style="font-size:1.6rem;margin-bottom:.5rem">⭐</div>
+    <div style="font-size:1rem;font-weight:800;color:#e2e8f0;margin-bottom:.25rem">Rate Your Ride</div>
+    <div style="font-size:.8rem;color:#64748b;margin-bottom:1.1rem">How was <span id="rating-driver-name">your driver</span>?</div>
+    <div style="display:flex;justify-content:center;gap:.5rem;margin-bottom:.9rem">
+      <button class="star-btn" onclick="selectStar(1)">★</button>
+      <button class="star-btn" onclick="selectStar(2)">★</button>
+      <button class="star-btn" onclick="selectStar(3)">★</button>
+      <button class="star-btn" onclick="selectStar(4)">★</button>
+      <button class="star-btn" onclick="selectStar(5)">★</button>
+    </div>
+    <textarea id="rating-review-text" placeholder="Add a comment (optional)…" style="width:100%;background:#06060e;border:1px solid #1e1e2e;border-radius:8px;padding:.6rem .8rem;color:#e2e8f0;font-size:.82rem;resize:none;height:70px;outline:none;margin-bottom:.75rem"></textarea>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="skipRating()" style="flex:1;padding:.6rem;border-radius:8px;background:#1a1a2a;border:1px solid #1e1e2e;color:#64748b;cursor:pointer;font-size:.85rem">Skip</button>
+      <button id="rating-submit-btn" onclick="submitRating()" style="flex:2;padding:.6rem;border-radius:8px;background:#f5c518;color:#06060e;border:none;cursor:pointer;font-size:.85rem;font-weight:800">Submit Rating</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Support Modal ── -->
+<div class="modal-overlay" id="support-modal" style="display:none;align-items:center" onclick="if(event.target===this)closeSupportModal()">
+  <div class="modal-card" style="max-width:360px">
+    <div style="font-size:1rem;font-weight:800;color:#e2e8f0;margin-bottom:.9rem">🎫 Contact Support</div>
+    <input id="sup-subject" type="text" placeholder="Subject (e.g. Payment issue…)" style="width:100%;background:#06060e;border:1px solid #1e1e2e;border-radius:8px;padding:.6rem .8rem;color:#e2e8f0;font-size:.85rem;outline:none;margin-bottom:.55rem">
+    <textarea id="sup-message" placeholder="Describe your issue…" style="width:100%;background:#06060e;border:1px solid #1e1e2e;border-radius:8px;padding:.6rem .8rem;color:#e2e8f0;font-size:.85rem;resize:none;height:90px;outline:none;margin-bottom:.75rem"></textarea>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="closeSupportModal()" style="flex:1;padding:.6rem;border-radius:8px;background:#1a1a2a;border:1px solid #1e1e2e;color:#64748b;cursor:pointer;font-size:.85rem">Cancel</button>
+      <button id="sup-submit-btn" onclick="submitSupportTicket()" style="flex:2;padding:.6rem;border-radius:8px;background:#f5c518;color:#06060e;border:none;cursor:pointer;font-size:.85rem;font-weight:800">Send Ticket</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Emergency Contacts Modal ── -->
 <div class="modal-overlay" id="ec-modal">
@@ -1329,7 +1368,7 @@ function connectToRideRoom(rideId) {
   });
 
   socket.on('ride:status', ({ status }) => {
-    if (status === 'completed') { showToast('Ride completed! 🎉', 'success'); setTimeout(endRide, 2000); }
+    if (status === 'completed') { showToast('Ride completed! 🎉', 'success'); setTimeout(showRatingModal, 1500); }
     else if (status === 'cancelled') { showToast('Ride was cancelled', 'error'); setTimeout(endRide, 1500); }
     else if (status === 'arrived') {
       document.getElementById('ar-status-text').textContent = 'Driver has arrived! 📍';
@@ -1427,6 +1466,73 @@ async function loadRideHistory() {
       </div>`;
     }).join('');
   } catch {}
+}
+
+// ── Rating Modal ──────────────────────────────────────────────────────────
+let _ratingRideId = null;
+let _ratingSelected = 0;
+
+function showRatingModal() {
+  _ratingRideId = activeRide?._id || null;
+  _ratingSelected = 0;
+  document.querySelectorAll('.star-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('rating-review-text').value = '';
+  document.getElementById('rating-driver-name').textContent = activeDriverInfo?.name || 'your driver';
+  document.getElementById('rating-modal').classList.add('open');
+}
+
+function selectStar(n) {
+  _ratingSelected = n;
+  document.querySelectorAll('.star-btn').forEach((b, i) => b.classList.toggle('selected', i < n));
+}
+
+async function submitRating() {
+  if (!_ratingSelected) return showToast('Please select a star rating', 'error');
+  const review = document.getElementById('rating-review-text').value.trim();
+  const btn = document.getElementById('rating-submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    if (_ratingRideId) {
+      await apiCall(`/api/rides/${_ratingRideId}/review`, 'PATCH', { rating: _ratingSelected, review });
+    }
+    document.getElementById('rating-modal').classList.remove('open');
+    showToast('Thanks for your feedback! ⭐', 'success');
+  } catch (e) {
+    showToast(e.message || 'Could not submit rating', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit Rating';
+    endRide();
+  }
+}
+
+function skipRating() {
+  document.getElementById('rating-modal').classList.remove('open');
+  endRide();
+}
+
+// ── Support Ticket ────────────────────────────────────────────────────────
+function openSupportModal() {
+  document.getElementById('support-modal').classList.add('open');
+  // Close dots menu
+  document.getElementById('dots-dropdown').style.display = 'none';
+}
+function closeSupportModal() { document.getElementById('support-modal').classList.remove('open'); }
+
+async function submitSupportTicket() {
+  const subject = document.getElementById('sup-subject').value.trim();
+  const message = document.getElementById('sup-message').value.trim();
+  if (!subject) return showToast('Enter a subject', 'error');
+  if (!message) return showToast('Enter your message', 'error');
+  const btn = document.getElementById('sup-submit-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await apiCall('/api/support/ticket', 'POST', { subject, message });
+    showToast('Ticket submitted! We\'ll get back to you soon.', 'success');
+    document.getElementById('sup-subject').value = '';
+    document.getElementById('sup-message').value = '';
+    closeSupportModal();
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Send Ticket'; }
 }
 
 // ── Tab Navigation ─────────────────────────────────────────────────────────

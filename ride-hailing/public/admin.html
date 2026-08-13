@@ -232,6 +232,8 @@ input[type=date]:focus{border-color:#f5c518}
       <div class="sb-item"        onclick="showSection('live-rides')"   data-sec="live-rides">  <span class="sb-icon">🗺️</span> Live Rides</div>
       <div class="sb-item"        onclick="showSection('sos')"          data-sec="sos">         <span class="sb-icon">🆘</span> SOS Monitor <span class="sb-badge-count" id="sos-cnt" style="display:none">0</span></div>
       <div class="sb-item"        onclick="showSection('pay-settings')" data-sec="pay-settings"><span class="sb-icon">⚙️</span> Payment Settings</div>
+      <div class="sb-item"        onclick="showSection('ratings')"      data-sec="ratings">      <span class="sb-icon">⭐</span> Ratings & Feedback</div>
+      <div class="sb-item"        onclick="showSection('support')"      data-sec="support">      <span class="sb-icon">🎫</span> Support Tickets <span class="sb-badge-count" id="sup-cnt" style="display:none">0</span></div>
     </div>
     <div class="sb-footer">
       <div id="admin-email-lbl">—</div>
@@ -293,12 +295,16 @@ input[type=date]:focus{border-color:#f5c518}
               <div class="ftab" onclick="loadDrivers('suspended');setFTab(this)">Suspended</div>
               <div class="ftab" onclick="loadDrivers('blocked');setFTab(this)">Blocked</div>
             </div>
+            <button id="bulk-trial-btn" class="btn btn-yellow" onclick="grantBulkTrial()" disabled>🎁 Grant 1-Month Trial</button>
             <button class="btn-refresh" onclick="loadDrivers(currentDriverStatus)">↻</button>
           </div>
         </div>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Driver</th><th>Phone</th><th>Vehicle</th><th>Rating</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
-          <tbody id="drivers-tbody"><tr><td colspan="7" class="loading-row">Loading…</td></tr></tbody>
+          <thead><tr>
+            <th style="width:32px"><input type="checkbox" id="select-all-chk" onchange="toggleSelectAll(this.checked)" style="cursor:pointer"></th>
+            <th>Driver</th><th>Phone</th><th>Vehicle</th><th>Rating</th><th>Status</th><th>Joined</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="drivers-tbody"><tr><td colspan="8" class="loading-row">Loading…</td></tr></tbody>
         </table></div>
       </div>
 
@@ -472,6 +478,37 @@ input[type=date]:focus{border-color:#f5c518}
         <div id="ps-feedback" style="margin-top:.75rem;font-size:.8rem;min-height:1.2em"></div>
       </div>
 
+      <!-- ════ 11. RATINGS & FEEDBACK ════ -->
+      <div class="section-panel" id="sec-ratings">
+        <div class="sec-hdr">
+          <h2>⭐ Ratings & Feedback</h2>
+          <div class="sec-hdr-actions">
+            <button class="btn-refresh" onclick="loadRatings()">↻ Refresh</button>
+          </div>
+        </div>
+        <p style="font-size:.78rem;color:#475569;margin-bottom:1rem">Drivers with avg rating below ⭐3.0 are highlighted in red.</p>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Passenger</th><th>Driver</th><th>Stars</th><th>Review</th><th>Fare</th><th>Date</th></tr></thead>
+          <tbody id="ratings-tbody"><tr><td colspan="6" class="loading-row">Loading…</td></tr></tbody>
+        </table></div>
+      </div>
+
+      <!-- ════ 12. SUPPORT TICKETS ════ -->
+      <div class="section-panel" id="sec-support">
+        <div class="sec-hdr">
+          <h2>🎫 Support Tickets</h2>
+          <div class="sec-hdr-actions">
+            <div class="filter-tabs">
+              <div class="ftab active" onclick="loadSupportTickets('open');setFTab(this)">Open</div>
+              <div class="ftab" onclick="loadSupportTickets('resolved');setFTab(this)">Resolved</div>
+              <div class="ftab" onclick="loadSupportTickets('all');setFTab(this)">All</div>
+            </div>
+            <button class="btn-refresh" onclick="loadSupportTickets(currentSupStatus)">↻</button>
+          </div>
+        </div>
+        <div id="support-list"><div class="loading-row">Loading…</div></div>
+      </div>
+
     </div><!-- /content-area -->
   </div><!-- /main -->
 </div><!-- /admin-app -->
@@ -532,12 +569,14 @@ let adminToken = localStorage.getItem('admin_token');
 let adminEmail = localStorage.getItem('admin_email') || '';
 let socket = null;
 let pendingAction = null; // { userId, action, onConfirm }
-let currentPayStatus   = 'pending';
-let currentDriverStatus= 'all';
-let currentPassStatus  = 'all';
-let currentRideStatus  = 'active';
-let currentSOSFilter   = 'false';
+let currentPayStatus    = 'pending';
+let currentDriverStatus = 'all';
+let currentPassStatus   = 'all';
+let currentRideStatus   = 'active';
+let currentSOSFilter    = 'false';
+let currentSupStatus    = 'open';
 let maxIncome = 0;
+let selectedDriverIds   = new Set();
 
 // ── API Helper ────────────────────────────────────────────────────────────────
 async function api(path, method = 'GET', body = null) {
@@ -648,7 +687,7 @@ const SECTION_TITLES = {
   passengers:'Passengers Directory', 'new-requests':'New Driver Requests',
   'temp-blocked':'Temporarily Blocked Drivers', 'blk-pass':'Blocked Passengers',
   'live-rides':'Live Rides & History', sos:'SOS Alert Monitor',
-  'pay-settings':'Payment Settings'
+  'pay-settings':'Payment Settings', ratings:'Ratings & Feedback', support:'Support Tickets'
 };
 function showSection(name) {
   document.querySelectorAll('.sb-item').forEach(el => el.classList.toggle('active', el.dataset.sec === name));
@@ -665,7 +704,8 @@ function showSection(name) {
     drivers: () => loadDrivers(currentDriverStatus), passengers: () => loadPassengers(currentPassStatus),
     'new-requests': loadNewRequests, 'temp-blocked': loadTempBlocked,
     'blk-pass': loadBlockedPass, 'live-rides': () => loadRides(currentRideStatus),
-    sos: () => loadSOS(currentSOSFilter), 'pay-settings': loadPaymentSettings
+    sos: () => loadSOS(currentSOSFilter), 'pay-settings': loadPaymentSettings,
+    ratings: loadRatings, support: () => loadSupportTickets(currentSupStatus)
   };
   loaders[name]?.();
 }
@@ -696,6 +736,13 @@ async function loadStats() {
     const rc = s.pendingDrivers||0;
     const re = document.getElementById('req-cnt');
     re.textContent = rc; re.style.display = rc ? 'inline' : 'none';
+    // Support ticket badge
+    try {
+      const tickets = await api('/api/admin/support?status=open');
+      const sc = tickets.length;
+      const se = document.getElementById('sup-cnt');
+      se.textContent = sc; se.style.display = sc ? 'inline' : 'none';
+    } catch {}
   } catch {}
 }
 
@@ -774,24 +821,35 @@ async function loadDrivers(status = 'all') {
   try {
     const drivers = await api(`/api/admin/drivers?status=${status}`);
     if (!drivers.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><span class="empty-icon">🚗</span>No drivers found</td></tr>'; return; }
-    tbody.innerHTML = drivers.map(d => `<tr>
-      <td><div style="font-weight:700;color:#e2e8f0">${d.name}</div></td>
-      <td>${d.phone||'—'}</td>
-      <td><div style="font-size:.75rem">${d.vehicleType||'—'}<br><span style="color:#475569">${d.vehicleModel||''} ${d.vehiclePlate||''}</span></div></td>
-      <td>⭐ ${(d.rating||5).toFixed(1)}</td>
-      <td>${badgeHtml(d.accountStatus||'active')}</td>
-      <td style="font-size:.72rem;color:#475569">${fmtDate(d.createdAt)}</td>
-      <td><div style="display:flex;gap:.3rem;flex-wrap:wrap">
-        <button class="btn btn-blue" onclick="viewUser('${d._id}','driver')">👁</button>
-        <button class="btn btn-gray" onclick="viewDocs('${d._id}')">📄</button>
-        ${d.accountStatus==='pending'   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','approve','driver')">✓ Approve</button>` : ''}
-        ${d.accountStatus==='active'    ? `<button class="btn btn-yellow" onclick="userAction('${d._id}','suspend','driver')">⏸ Suspend</button>
-          <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔ Block</button>` : ''}
-        ${d.accountStatus==='suspended' ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶ Activate</button>
-          <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔ Block</button>` : ''}
-        ${d.accountStatus==='blocked'   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶ Unblock</button>` : ''}
-      </div></td>
-    </tr>`).join('');
+    document.getElementById('select-all-chk').checked = false;
+    selectedDriverIds.clear(); updateBulkGrantBtn();
+    tbody.innerHTML = drivers.map(d => {
+      const lowRating = (d.rating||5) < 3;
+      const hasPhoto = d.profilePhoto && d.profilePhoto.startsWith('data:');
+      const avatarHtml = hasPhoto
+        ? `<img src="${d.profilePhoto}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:1px solid #2a2a38;vertical-align:middle;margin-right:.4rem">`
+        : `<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#1a1a28;color:#f5c518;font-size:.75rem;font-weight:700;vertical-align:middle;margin-right:.4rem">${(d.name||'D')[0].toUpperCase()}</span>`;
+      return `<tr>
+        <td><input type="checkbox" class="driver-chk" value="${d._id}" style="cursor:pointer" onchange="toggleDriverSelect('${d._id}',this.checked)"></td>
+        <td><div style="display:flex;align-items:center">${avatarHtml}<div><div style="font-weight:700;color:#e2e8f0">${d.name}</div></div></div></td>
+        <td>${d.phone||'—'}</td>
+        <td><div style="font-size:.75rem">${d.vehicleType||'—'}<br><span style="color:#475569">${d.vehicleModel||''} ${d.vehiclePlate||''}</span></div></td>
+        <td style="${lowRating?'color:#ef4444':''};font-weight:${lowRating?'700':'400'}">⭐ ${(d.rating||5).toFixed(1)}</td>
+        <td>${badgeHtml(d.accountStatus||'active')}</td>
+        <td style="font-size:.72rem;color:#475569">${fmtDate(d.createdAt)}</td>
+        <td><div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          <button class="btn btn-blue"   onclick="viewUser('${d._id}','driver')">👁</button>
+          <button class="btn btn-gray"   onclick="viewDocs('${d._id}')">📄</button>
+          <button class="btn btn-yellow" onclick="grantTrial('${d._id}')" title="Grant 1-Month Free Trial">🎁</button>
+          ${d.accountStatus==='pending'   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','approve','driver')">✓</button>` : ''}
+          ${d.accountStatus==='active'    ? `<button class="btn btn-yellow" onclick="userAction('${d._id}','suspend','driver')">⏸</button>
+            <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔</button>` : ''}
+          ${d.accountStatus==='suspended' ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>
+            <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔</button>` : ''}
+          ${d.accountStatus==='blocked'   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>` : ''}
+        </div></td>
+      </tr>`;
+    }).join('');
   } catch (e) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
 }
 
@@ -1109,6 +1167,114 @@ function badgeHtml(status) {
   const map = { active:'badge-active', pending:'badge-pending', suspended:'badge-suspended', blocked:'badge-blocked', approved:'badge-approved', rejected:'badge-rejected' };
   const labels = { active:'✓ Active', pending:'⏳ Pending', suspended:'⏸ Suspended', blocked:'⛔ Blocked', approved:'✓ Approved', rejected:'✕ Rejected' };
   return `<span class="badge ${map[status]||'badge-pending'}">${labels[status]||status}</span>`;
+}
+
+// ── Ratings & Feedback ────────────────────────────────────────────────────────
+async function loadRatings() {
+  const tbody = document.getElementById('ratings-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="loading-row">Loading…</td></tr>';
+  try {
+    const rides = await api('/api/admin/ratings');
+    if (!rides.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="empty-icon">⭐</span>No reviews yet</div></td></tr>'; return; }
+    tbody.innerHTML = rides.map(r => {
+      const pass = r.passenger || {};
+      const drv  = r.driver    || {};
+      const stars = '★'.repeat(r.driverRating||0) + '☆'.repeat(5-(r.driverRating||0));
+      const lowRating = (drv.rating||5) < 3;
+      return `<tr>
+        <td>${pass.name||'—'}<br><span style="font-size:.68rem;color:#475569">${pass.phone||'—'}</span></td>
+        <td style="${lowRating?'color:#ef4444;font-weight:700':''}">${drv.name||'—'}<br>
+          <span style="font-size:.68rem;color:#475569">avg ⭐${(drv.rating||5).toFixed(1)}</span></td>
+        <td><span style="color:#f5c518;font-size:.95rem;letter-spacing:.05em">${stars}</span><br>
+          <span style="font-size:.68rem;color:#475569">${r.driverRating}/5</span></td>
+        <td style="font-size:.78rem;color:#94a3b8;max-width:180px">${r.driverReview||'<span style="color:#334155">No comment</span>'}</td>
+        <td style="color:#f5c518;font-weight:700">Rs ${(r.fare||0).toLocaleString()}</td>
+        <td style="font-size:.72rem;color:#475569">${fmtDate(r.createdAt)}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
+}
+
+// ── Support Tickets ───────────────────────────────────────────────────────────
+async function loadSupportTickets(status = 'open') {
+  currentSupStatus = status;
+  const el = document.getElementById('support-list');
+  el.innerHTML = '<div class="loading-row">Loading…</div>';
+  try {
+    const tickets = await api(`/api/admin/support?status=${status}`);
+    if (!tickets.length) { el.innerHTML = '<div class="empty-state"><span class="empty-icon">✅</span>No tickets found</div>'; return; }
+    el.innerHTML = tickets.map(t => {
+      const u = t.user || {};
+      const isOpen = t.status === 'open';
+      return `<div class="pay-card" id="ticket-${t._id}" style="${isOpen?'border-left:3px solid #f5c518':'border-left:3px solid #22c55e'}">
+        <div class="pay-info">
+          <div class="pay-name">${isOpen?'🟡':'✅'} ${t.subject}${isOpen?'<span class="new-notif">OPEN</span>':''}</div>
+          <div class="pay-meta">👤 ${u.name||'—'} · 📱 ${u.phone||u.email||'—'} · ${u.role||'customer'}</div>
+          <div class="pay-meta" style="color:#94a3b8;margin-top:.3rem">${t.message}</div>
+          ${t.adminReply ? `<div class="pay-meta" style="color:#22c55e;margin-top:.3rem">✉ Admin reply: ${t.adminReply}</div>` : ''}
+          <div class="pay-meta" style="margin-top:.25rem">${fmtDate(t.createdAt)}</div>
+        </div>
+        ${isOpen ? `<div class="pay-actions">
+          <button class="btn btn-green" onclick="resolveTicket('${t._id}')">✓ Resolve</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) { el.innerHTML = `<div class="empty-state" style="color:#ef4444">${e.message}</div>`; }
+}
+
+async function resolveTicket(id) {
+  const reply = prompt('Optional admin reply to the user:') || '';
+  try {
+    await api(`/api/admin/support/${id}/resolve`, 'PATCH', { adminReply: reply });
+    showToast('Ticket resolved ✓', 'success');
+    loadSupportTickets(currentSupStatus); loadStats();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ── Bulk Free Trial ───────────────────────────────────────────────────────────
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.driver-chk').forEach(cb => {
+    cb.checked = checked;
+    if (checked) selectedDriverIds.add(cb.value);
+    else selectedDriverIds.delete(cb.value);
+  });
+  updateBulkGrantBtn();
+}
+
+function toggleDriverSelect(id, checked) {
+  if (checked) selectedDriverIds.add(id);
+  else selectedDriverIds.delete(id);
+  const allCbs = document.querySelectorAll('.driver-chk');
+  document.getElementById('select-all-chk').checked = [...allCbs].every(c => c.checked);
+  updateBulkGrantBtn();
+}
+
+function updateBulkGrantBtn() {
+  const btn = document.getElementById('bulk-trial-btn');
+  if (btn) {
+    const n = selectedDriverIds.size;
+    btn.textContent = n ? `🎁 Grant 1-Month Trial (${n} selected)` : '🎁 Grant 1-Month Trial';
+    btn.disabled = n === 0;
+  }
+}
+
+async function grantBulkTrial() {
+  if (!selectedDriverIds.size) return showToast('Select at least one driver', 'error');
+  if (!confirm(`Grant 1-month free trial credit to ${selectedDriverIds.size} driver(s)?`)) return;
+  try {
+    const res = await api('/api/admin/drivers/grant-trial', 'POST', { driverIds: [...selectedDriverIds] });
+    showToast(`✓ Credited ${res.credited} driver(s)`, 'success');
+    selectedDriverIds.clear();
+    loadDrivers(currentDriverStatus);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function grantTrial(driverId) {
+  if (!confirm('Grant 1-month free trial credit to this driver?')) return;
+  try {
+    const res = await api('/api/admin/drivers/grant-trial', 'POST', { driverIds: [driverId] });
+    showToast(`✓ ${res.results[0]?.name} credited Rs ${res.results[0]?.amount?.toLocaleString()}`, 'success');
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ── Payment Settings ──────────────────────────────────────────────────────────

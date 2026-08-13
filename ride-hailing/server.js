@@ -127,7 +127,9 @@ const rideSchema = new mongoose.Schema({
     price:        Number,
     type:         { type: String, enum: ['accept', 'counter'], default: 'accept' },
     timestamp:    { type: Date, default: Date.now }
-  }]
+  }],
+  driverRating: { type: Number, default: null },
+  driverReview: { type: String,  default: '' }
 }, { timestamps: true });
 
 const walletSchema = new mongoose.Schema({
@@ -149,6 +151,15 @@ const sosSchema = new mongoose.Schema({
   message:  { type: String, default: 'SOS Emergency Alert!' },
   ride:     { type: mongoose.Schema.Types.ObjectId, ref: 'Ride', default: null },
   resolved: { type: Boolean, default: false }
+}, { timestamps: true });
+
+const ticketSchema = new mongoose.Schema({
+  user:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  role:       { type: String, enum: ['customer','driver'], required: true },
+  subject:    { type: String, required: true, trim: true },
+  message:    { type: String, required: true, trim: true },
+  status:     { type: String, enum: ['open','resolved'], default: 'open' },
+  adminReply: { type: String, default: '' }
 }, { timestamps: true });
 
 const paymentSchema = new mongoose.Schema({
@@ -176,6 +187,7 @@ const Ride     = mongoose.model('Ride',     rideSchema);
 const Wallet   = mongoose.model('Wallet',   walletSchema);
 const SOS      = mongoose.model('SOS',      sosSchema);
 const Payment  = mongoose.model('Payment',  paymentSchema);
+const Ticket   = mongoose.model('Ticket',   ticketSchema);
 const Settings = mongoose.model('Settings', settingsSchema);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,7 +238,8 @@ function adminJwt(req, res, next) {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, phone, role, vehicleType, vehicleModel, vehiclePlate } = req.body;
+    const { name, email, password, phone, role, vehicleType, vehicleModel, vehiclePlate,
+            profilePhoto, licensePhoto, cnicFront, cnicBack } = req.body;
     if (!name || !password) return res.status(400).json({ error: 'Name and password are required' });
     if (!email && !phone)   return res.status(400).json({ error: 'Email or phone number is required' });
 
@@ -248,7 +261,11 @@ app.post('/api/auth/register', async (req, res) => {
       accountStatus: resolvedRole === 'driver' ? 'pending' : 'active',
       vehicleType:   vehicleType    || '',
       vehicleModel:  vehicleModel   || '',
-      vehiclePlate:  vehiclePlate   || ''
+      vehiclePlate:  vehiclePlate   || '',
+      profilePhoto:  profilePhoto   || '',
+      licensePhoto:  licensePhoto   || '',
+      cnicFront:     cnicFront      || '',
+      cnicBack:      cnicBack       || ''
     });
     await Wallet.create({ user: user._id, balance: 0, transactions: [] });
 
@@ -1120,6 +1137,129 @@ app.patch('/api/admin/payments/:id/reject', adminJwt, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Profile Photo Upload
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.put('/api/auth/profile/photos', authMiddleware, async (req, res) => {
+  try {
+    const { profilePhoto, licensePhoto, cnicFront, cnicBack, vehicleRegPhoto } = req.body;
+    const update = {};
+    if (profilePhoto   !== undefined) update.profilePhoto   = profilePhoto;
+    if (licensePhoto   !== undefined) update.licensePhoto   = licensePhoto;
+    if (cnicFront      !== undefined) update.cnicFront      = cnicFront;
+    if (cnicBack       !== undefined) update.cnicBack       = cnicBack;
+    if (vehicleRegPhoto !== undefined) update.vehicleRegPhoto = vehicleRegPhoto;
+    await User.updateOne({ _id: req.user.id }, update);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ride Review / Rating
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.patch('/api/rides/:id/review', authMiddleware, async (req, res) => {
+  try {
+    const { rating, review } = req.body;
+    if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1–5' });
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ error: 'Ride not found' });
+    if (String(ride.passenger) !== String(req.user.id)) return res.status(403).json({ error: 'Not your ride' });
+    if (ride.status !== 'completed') return res.status(400).json({ error: 'Ride not completed' });
+    if (ride.driverRating !== null) return res.status(409).json({ error: 'Already reviewed' });
+    ride.driverRating = Number(rating);
+    ride.driverReview = (review || '').trim();
+    await ride.save();
+    // Update driver average rating
+    if (ride.driver) {
+      const ratings = await Ride.find({ driver: ride.driver, driverRating: { $ne: null } }).select('driverRating');
+      const avg = ratings.reduce((s, r) => s + r.driverRating, 0) / ratings.length;
+      await User.updateOne({ _id: ride.driver }, { rating: +avg.toFixed(1), $inc: { totalRides: 0 } });
+    }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Support Tickets
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post('/api/support/ticket', authMiddleware, async (req, res) => {
+  try {
+    const { subject, message } = req.body;
+    if (!subject?.trim() || !message?.trim()) return res.status(400).json({ error: 'Subject and message required' });
+    const ticket = await Ticket.create({
+      user: req.user.id, role: req.user.role || 'customer',
+      subject: subject.trim(), message: message.trim()
+    });
+    res.status(201).json(ticket);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/support', adminJwt, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = {};
+    if (status && status !== 'all') filter.status = status;
+    const tickets = await Ticket.find(filter)
+      .populate('user', 'name phone email role')
+      .sort('-createdAt').limit(100);
+    res.json(tickets);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/admin/support/:id/resolve', adminJwt, async (req, res) => {
+  try {
+    const { adminReply } = req.body;
+    await Ticket.updateOne({ _id: req.params.id }, { status: 'resolved', adminReply: adminReply || '' });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ratings & Reviews (admin)
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get('/api/admin/ratings', adminJwt, async (req, res) => {
+  try {
+    const rides = await Ride.find({ driverRating: { $ne: null } })
+      .populate('passenger', 'name phone')
+      .populate('driver', 'name phone vehiclePlate rating')
+      .select('driverRating driverReview createdAt fare vehicleType')
+      .sort('-createdAt').limit(100);
+    res.json(rides);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin: Grant Free Trial Credit
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TRIAL_AMOUNTS = { 'Bike': 2000, 'Rickshaw': 3000, 'Car Mini': 4500, 'Car AC': 6500 };
+
+app.post('/api/admin/drivers/grant-trial', adminJwt, async (req, res) => {
+  try {
+    const { driverIds } = req.body; // array of user IDs
+    if (!Array.isArray(driverIds) || !driverIds.length)
+      return res.status(400).json({ error: 'driverIds array required' });
+
+    const drivers = await User.find({ _id: { $in: driverIds }, role: 'driver' }).select('vehicleType name');
+    const results = [];
+    for (const driver of drivers) {
+      const amount = TRIAL_AMOUNTS[driver.vehicleType] || 4500;
+      await Wallet.findOneAndUpdate(
+        { user: driver._id },
+        { $inc: { balance: amount },
+          $push: { transactions: { amount, type: 'credit', description: '1-Month Promotional Bonus Credit' } } },
+        { upsert: true, new: true }
+      );
+      results.push({ id: driver._id, name: driver.name, amount });
+    }
+    res.json({ success: true, credited: results.length, results });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Settings Routes
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1240,9 +1380,18 @@ io.on('connection', (socket) => {
   socket.on('driver:status', async ({ isOnline }) => {
     if (role !== 'driver') return;
     if (isOnline) {
-      const driver = await User.findById(id).select('accountStatus').catch(() => null);
+      const [driver, wallet] = await Promise.all([
+        User.findById(id).select('accountStatus').catch(() => null),
+        Wallet.findOne({ user: id }).select('balance').catch(() => null)
+      ]);
       if (driver?.accountStatus === 'suspended' || driver?.accountStatus === 'blocked') {
         socket.emit('account:suspended', { reason: 'Your account is not active. Contact admin.' });
+        return;
+      }
+      if (wallet && wallet.balance < 0) {
+        socket.emit('account:suspended', {
+          reason: `Insufficient wallet balance (Rs ${Math.abs(wallet.balance).toFixed(0)} due). Please recharge to go online.`
+        });
         return;
       }
     }
@@ -1309,3 +1458,47 @@ async function start() {
 }
 
 start();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily Subscription Deduction (runs at UTC midnight every day)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DAILY_SUB_RATES = { 'Bike': 67, 'Rickshaw': 100, 'Car Mini': 150, 'Car AC': 217 };
+
+async function runDailyDeduction() {
+  if (!dbConnected) return;
+  console.log('⏰ Running daily subscription deduction…');
+  try {
+    const drivers = await User.find({ role: 'driver', accountStatus: 'active' }).select('_id vehicleType name');
+    let count = 0;
+    for (const driver of drivers) {
+      const rate = DAILY_SUB_RATES[driver.vehicleType] || 150;
+      await Wallet.findOneAndUpdate(
+        { user: driver._id },
+        { $inc: { balance: -rate },
+          $push: { transactions: { amount: rate, type: 'debit',
+            description: `Daily subscription (${driver.vehicleType || 'Car'})` } } },
+        { upsert: true }
+      ).catch(() => {});
+      count++;
+    }
+    console.log(`✓ Daily deduction complete: ${count} drivers charged`);
+  } catch (err) { console.error('Daily deduction error:', err.message); }
+}
+
+(function scheduleMidnightDeduction() {
+  function msUntilMidnight() {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setUTCHours(24, 0, 0, 0);
+    return midnight - now;
+  }
+  function scheduleNext() {
+    setTimeout(async () => {
+      await runDailyDeduction();
+      scheduleNext(); // re-schedule for next midnight
+    }, msUntilMidnight());
+  }
+  scheduleNext();
+  console.log(`⏰ Daily deduction scheduled (next run at UTC midnight)`);
+})();
