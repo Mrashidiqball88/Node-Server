@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyRide — Admin Panel</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh}
+
+/* ── Auth Screen ── */
+#auth-screen{position:fixed;inset:0;z-index:1000;background:#0a0a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem}
+.auth-logo{font-size:2rem;font-weight:800;margin-bottom:.25rem}.auth-logo span{color:#f5c518}
+.auth-subtitle{color:#555;font-size:.85rem;margin-bottom:2rem}
+.auth-card{background:#13131a;border:1px solid #222;border-radius:20px;padding:1.5rem;width:100%;max-width:380px}
+.auth-title{font-size:1.1rem;font-weight:700;margin-bottom:1.25rem;color:#f5c518;display:flex;align-items:center;gap:.5rem}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:.8rem;color:#888;margin-bottom:.4rem}
+.form-group input{width:100%;background:#0a0a0f;border:1px solid #333;border-radius:10px;padding:.75rem 1rem;color:#fff;font-size:.95rem;outline:none;transition:border-color .2s}
+.form-group input:focus{border-color:#f5c518}
+.btn-login{width:100%;background:#f5c518;color:#0a0a0f;border:none;border-radius:12px;padding:.85rem;font-size:1rem;font-weight:700;cursor:pointer;margin-top:.5rem;transition:opacity .2s}
+.btn-login:hover{opacity:.85}
+.auth-error{color:#ff5555;font-size:.85rem;text-align:center;margin-top:.75rem;min-height:1.2em}
+
+/* ── App Layout ── */
+#app{display:none;flex-direction:column;min-height:100vh}
+
+/* ── Header ── */
+.header{background:#0d1117;border-bottom:1px solid #f5c518;padding:.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.header-logo{font-size:1.2rem;font-weight:800}.header-logo span{color:#f5c518}
+.header-badge{background:#2a1f00;border:1px solid #f5c518;border-radius:100px;padding:.25rem .75rem;font-size:.75rem;color:#f5c518;font-weight:700}
+.header-right{display:flex;align-items:center;gap:.75rem}
+.admin-name{font-size:.85rem;color:#888}
+.btn-logout{background:none;border:1px solid #333;color:#888;border-radius:8px;padding:.3rem .7rem;font-size:.75rem;cursor:pointer;transition:border-color .2s}
+.btn-logout:hover{border-color:#666;color:#ccc}
+
+/* ── Main Content ── */
+.main{padding:1.5rem;max-width:1100px;margin:0 auto;width:100%}
+
+/* ── Section Header ── */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.section-title{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.badge-count{background:#1e3a5f;border:1px solid #4488cc;border-radius:100px;padding:.15rem .55rem;font-size:.75rem;color:#7ab8ff;font-weight:700}
+.badge-count.zero{background:#1a1a2a;border-color:#333;color:#555}
+.btn-refresh{background:none;border:1px solid #333;color:#777;border-radius:8px;padding:.3rem .7rem;font-size:.75rem;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:.35rem}
+.btn-refresh:hover{border-color:#555;color:#ccc}
+.btn-refresh.spinning svg{animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Pending Cards ── */
+.pending-list{display:flex;flex-direction:column;gap:.75rem;margin-bottom:2.5rem}
+.payment-card{background:#13131a;border:1px solid #222;border-radius:16px;padding:1.25rem;transition:border-color .2s}
+.payment-card:hover{border-color:#333}
+
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.driver-info{display:flex;flex-direction:column;gap:.25rem}
+.driver-name{font-size:1rem;font-weight:700}
+.driver-meta{font-size:.8rem;color:#777;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.meta-pill{background:#1a1a2a;border:1px solid #2a2a3a;border-radius:6px;padding:.15rem .5rem;font-size:.75rem;color:#aaa}
+
+.trx-block{text-align:right}
+.trx-amount{font-size:1.4rem;font-weight:800;color:#f5c518}
+.trx-currency{font-size:.8rem;font-weight:400;color:#888}
+.trx-id{font-size:.75rem;color:#555;margin-top:.2rem;font-family:monospace;word-break:break-all;max-width:200px;text-align:right}
+
+.trx-date{font-size:.75rem;color:#555;margin-top:.75rem;padding-top:.75rem;border-top:1px solid #1a1a2a}
+
+.note-row{margin-top:.75rem;display:flex;gap:.5rem;align-items:flex-start}
+.note-input{flex:1;background:#0a0a0f;border:1px solid #2a2a3a;border-radius:8px;padding:.5rem .75rem;color:#ccc;font-size:.85rem;outline:none;resize:none;font-family:inherit;transition:border-color .2s}
+.note-input:focus{border-color:#555}
+.note-input::placeholder{color:#3a3a4a}
+
+.card-actions{display:flex;gap:.5rem;margin-top:.75rem}
+.btn-approve{flex:1;background:#0d2a0d;border:1px solid #2d5a2d;color:#4caf50;border-radius:10px;padding:.6rem;font-size:.9rem;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-approve:hover{background:#1a3d1a;border-color:#4caf50}
+.btn-approve:disabled{opacity:.4;cursor:not-allowed}
+.btn-reject{flex:1;background:#2a0a0a;border:1px solid #5a2020;color:#f06060;border-radius:10px;padding:.6rem;font-size:.9rem;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-reject:hover{background:#3d1a1a;border-color:#cc3333}
+.btn-reject:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Empty / Loading states ── */
+.empty-state{text-align:center;padding:2.5rem;color:#444;background:#13131a;border:1px dashed #222;border-radius:16px}
+.empty-icon{font-size:2rem;margin-bottom:.5rem}
+.empty-text{font-size:.9rem}
+.loading-state{text-align:center;padding:2rem;color:#555;font-size:.9rem}
+
+/* ── History Section ── */
+.history-table-wrap{overflow-x:auto;border-radius:12px;border:1px solid #1a1a2a}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+thead tr{background:#0d1117;border-bottom:1px solid #1a1a2a}
+thead th{padding:.75rem 1rem;text-align:left;color:#666;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+tbody tr{border-bottom:1px solid #111;transition:background .15s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#111118}
+td{padding:.75rem 1rem;vertical-align:middle}
+.td-driver{font-weight:600;white-space:nowrap}
+.td-sub{font-size:.75rem;color:#666;margin-top:.15rem}
+.td-amount{font-weight:700;color:#f5c518;white-space:nowrap}
+.td-trxid{font-family:monospace;font-size:.78rem;color:#666;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge-status{border-radius:100px;padding:.2rem .65rem;font-size:.75rem;font-weight:700;white-space:nowrap}
+.badge-approved{background:#0d2a0d;border:1px solid #2d5a2d;color:#4caf50}
+.badge-rejected{background:#2a0a0a;border:1px solid #5a2020;color:#f06060}
+.td-note{font-size:.8rem;color:#777;max-width:180px}
+.td-date{font-size:.78rem;color:#555;white-space:nowrap}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(120%);background:#1e1e2e;border:1px solid #333;border-radius:12px;padding:.75rem 1.25rem;font-size:.9rem;color:#fff;z-index:9999;transition:transform .3s ease;white-space:nowrap;pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.success{border-color:#2d5a2d;color:#4caf50}
+#toast.error{border-color:#5a2020;color:#f06060}
+
+@media(max-width:600px){
+  .trx-id{max-width:120px}
+  .card-top{flex-direction:column}
+  .trx-block{text-align:left}
+  .trx-id{text-align:left}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Auth Screen ── -->
+<div id="auth-screen">
+  <div class="auth-logo">My<span>Ride</span></div>
+  <p class="auth-subtitle">Admin Portal</p>
+  <div class="auth-card">
+    <div class="auth-title">🛡️ Admin Login</div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="admin@example.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn-login" id="login-btn">Sign In</button>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<!-- ── Main App ── -->
+<div id="app">
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <div class="header-logo">My<span>Ride</span></div>
+      <span class="header-badge">ADMIN</span>
+    </div>
+    <div class="header-right">
+      <span class="admin-name" id="admin-name"></span>
+      <button class="btn-logout" id="logout-btn">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- Pending Submissions -->
+    <div class="section-header">
+      <div class="section-title">
+        ⏳ Pending Submissions
+        <span class="badge-count zero" id="pending-count">0</span>
+      </div>
+      <button class="btn-refresh" id="refresh-pending-btn" title="Refresh">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+
+    <div class="pending-list" id="pending-list">
+      <div class="loading-state">Loading…</div>
+    </div>
+
+    <!-- History -->
+    <div class="section-header">
+      <div class="section-title">
+        📋 Recent History
+        <span class="badge-count zero" id="history-count">0</span>
+      </div>
+      <button class="btn-refresh" id="refresh-history-btn" title="Refresh history">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+
+    <div class="history-table-wrap" id="history-wrap">
+      <div class="loading-state" style="padding:2rem">Loading…</div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const TOKEN_KEY = 'admin_token';
+let token = localStorage.getItem(TOKEN_KEY);
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.className = ''; }, 3000);
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function vehicleLabel(v) {
+  const map = { standard:'Standard', comfort:'Comfort', xl:'XL / Van', moto:'Moto' };
+  return map[v] || v || '—';
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+document.getElementById('login-btn').addEventListener('click', doLogin);
+document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+async function doLogin() {
+  const email    = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const errEl    = document.getElementById('auth-error');
+  errEl.textContent = '';
+
+  if (!email || !password) { errEl.textContent = 'Please enter email and password.'; return; }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+
+  try {
+    const { token: tok, user } = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    }).then(r => r.json());
+
+    if (!tok) throw new Error('Login failed');
+
+    // Verify admin status
+    const meRes = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${tok}` } });
+    const me    = await meRes.json();
+    if (!me.isAdmin) {
+      errEl.textContent = 'This account does not have admin access.';
+      btn.disabled = false; btn.textContent = 'Sign In';
+      return;
+    }
+
+    token = tok;
+    localStorage.setItem(TOKEN_KEY, token);
+    launchApp(me);
+  } catch (err) {
+    errEl.textContent = err.message || 'Login failed. Check your credentials.';
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  localStorage.removeItem(TOKEN_KEY);
+  token = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('email').value = '';
+  document.getElementById('password').value = '';
+  document.getElementById('auth-error').textContent = '';
+});
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+
+async function boot() {
+  if (!token) return;
+  try {
+    const me = await api('/api/auth/me');
+    if (!me.isAdmin) { localStorage.removeItem(TOKEN_KEY); return; }
+    launchApp(me);
+  } catch {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+function launchApp(me) {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('admin-name').textContent = me.name || me.email || 'Admin';
+  loadPending();
+  loadHistory();
+}
+
+// ── Pending Payments ───────────────────────────────────────────────────────
+
+document.getElementById('refresh-pending-btn').addEventListener('click', () => {
+  const btn = document.getElementById('refresh-pending-btn');
+  btn.classList.add('spinning');
+  loadPending().finally(() => btn.classList.remove('spinning'));
+});
+
+async function loadPending() {
+  const list = document.getElementById('pending-list');
+  list.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const payments = await api('/api/payments/pending');
+    renderPending(payments);
+  } catch (err) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${err.message}</div></div>`;
+  }
+}
+
+function renderPending(payments) {
+  const list    = document.getElementById('pending-list');
+  const countEl = document.getElementById('pending-count');
+
+  countEl.textContent = payments.length;
+  countEl.className = `badge-count${payments.length ? '' : ' zero'}`;
+
+  if (!payments.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No pending submissions — all caught up!</div></div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  payments.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'payment-card';
+    card.dataset.id = p._id;
+
+    const driverName    = p.driver?.name        || 'Unknown Driver';
+    const driverPhone   = p.driver?.phone        || '';
+    const vehicleType   = vehicleLabel(p.driver?.vehicleType);
+    const submittedDate = p.submittedDate        || '—';
+
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="driver-info">
+          <div class="driver-name">${esc(driverName)}</div>
+          <div class="driver-meta">
+            ${driverPhone ? `<span class="meta-pill">📞 ${esc(driverPhone)}</span>` : ''}
+            <span class="meta-pill">🚗 ${esc(vehicleType)}</span>
+            <span class="meta-pill">📅 ${esc(submittedDate)}</span>
+          </div>
+        </div>
+        <div class="trx-block">
+          <div class="trx-amount">${p.amount.toLocaleString()} <span class="trx-currency">TRX</span></div>
+          <div class="trx-id">TRX ID: ${esc(p.trxId)}</div>
+        </div>
+      </div>
+      <div class="trx-date">Submitted ${fmtDate(p.createdAt)}</div>
+      <div class="note-row">
+        <textarea class="note-input" rows="1" placeholder="Optional admin note…"></textarea>
+      </div>
+      <div class="card-actions">
+        <button class="btn-approve">✅ Approve</button>
+        <button class="btn-reject">❌ Reject</button>
+      </div>
+    `;
+
+    card.querySelector('.btn-approve').addEventListener('click', () => handleDecision(p._id, 'approve', card));
+    card.querySelector('.btn-reject').addEventListener('click',  () => handleDecision(p._id, 'reject',  card));
+
+    list.appendChild(card);
+  });
+}
+
+async function handleDecision(id, action, card) {
+  const note    = card.querySelector('.note-input').value.trim();
+  const approveBtn = card.querySelector('.btn-approve');
+  const rejectBtn  = card.querySelector('.btn-reject');
+  approveBtn.disabled = rejectBtn.disabled = true;
+  approveBtn.textContent = rejectBtn.textContent = '…';
+
+  try {
+    await api(`/api/payments/${id}/${action}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ adminNote: note })
+    });
+
+    showToast(action === 'approve' ? '✅ Payment approved' : '❌ Payment rejected', action === 'approve' ? 'success' : 'error');
+
+    // Animate out
+    card.style.transition = 'opacity .3s, transform .3s';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(30px)';
+    setTimeout(() => {
+      card.remove();
+      // Update count
+      const remaining = document.querySelectorAll('#pending-list .payment-card').length;
+      const countEl = document.getElementById('pending-count');
+      countEl.textContent = remaining;
+      countEl.className = `badge-count${remaining ? '' : ' zero'}`;
+      if (!remaining) {
+        document.getElementById('pending-list').innerHTML =
+          '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No pending submissions — all caught up!</div></div>';
+      }
+    }, 300);
+
+    // Refresh history quietly
+    loadHistory();
+  } catch (err) {
+    showToast(err.message, 'error');
+    approveBtn.disabled = rejectBtn.disabled = false;
+    approveBtn.textContent = '✅ Approve';
+    rejectBtn.textContent  = '❌ Reject';
+  }
+}
+
+// ── History ────────────────────────────────────────────────────────────────
+
+document.getElementById('refresh-history-btn').addEventListener('click', () => {
+  const btn = document.getElementById('refresh-history-btn');
+  btn.classList.add('spinning');
+  loadHistory().finally(() => btn.classList.remove('spinning'));
+});
+
+async function loadHistory() {
+  const wrap = document.getElementById('history-wrap');
+  wrap.innerHTML = '<div class="loading-state" style="padding:2rem">Loading…</div>';
+  try {
+    const payments = await api('/api/payments/history');
+    renderHistory(payments);
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${err.message}</div></div>`;
+  }
+}
+
+function renderHistory(payments) {
+  const wrap    = document.getElementById('history-wrap');
+  const countEl = document.getElementById('history-count');
+
+  countEl.textContent = payments.length;
+  countEl.className = `badge-count${payments.length ? '' : ' zero'}`;
+
+  if (!payments.length) {
+    wrap.innerHTML = '<div class="empty-state" style="border-radius:12px"><div class="empty-icon">📂</div><div class="empty-text">No reviewed payments yet.</div></div>';
+    return;
+  }
+
+  const rows = payments.map(p => {
+    const driverName  = p.driver?.name       || 'Unknown';
+    const vehicleType = vehicleLabel(p.driver?.vehicleType);
+    const statusCls   = p.status === 'approved' ? 'badge-approved' : 'badge-rejected';
+    const statusLabel = p.status === 'approved' ? '✅ Approved' : '❌ Rejected';
+    return `
+      <tr>
+        <td>
+          <div class="td-driver">${esc(driverName)}</div>
+          <div class="td-sub">${esc(vehicleType)}</div>
+        </td>
+        <td><div class="td-amount">${p.amount.toLocaleString()} TRX</div></td>
+        <td><div class="td-trxid" title="${esc(p.trxId)}">${esc(p.trxId)}</div></td>
+        <td><span class="badge-status ${statusCls}">${statusLabel}</span></td>
+        <td><div class="td-note">${esc(p.adminNote || '—')}</div></td>
+        <td><div class="td-date">${fmtDate(p.updatedAt)}</div></td>
+      </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th>Amount</th>
+          <th>TRX ID</th>
+          <th>Status</th>
+          <th>Admin Note</th>
+          <th>Reviewed</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+boot();
+</script>
+</body>
+</html>

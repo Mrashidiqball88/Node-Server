@@ -578,6 +578,19 @@ app.patch('/api/payments/:id/reject', authMiddleware, adminMiddleware, async (re
   }
 });
 
+// GET /api/payments/history — admin: recently approved/rejected submissions
+app.get('/api/payments/history', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const payments = await Payment.find({ status: { $in: ['approved', 'rejected'] } })
+      .populate('driver', 'name phone vehicleType')
+      .sort({ updatedAt: -1 })
+      .limit(50);
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SOS Route
 // ─────────────────────────────────────────────────────────────────────────────
@@ -614,6 +627,7 @@ app.get('/api/health', (_req, res) => {
 // Page routes — '/' opens the customer app directly
 app.get('/customer', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
 app.get('/driver',   (_req, res) => res.sendFile(path.join(__dirname, 'public', 'driver.html')));
+app.get('/admin',    (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/',         (_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
 
 // Catch-all: serve customer app for any unmatched GET (prevents Cloud Run 404 on deep links)
