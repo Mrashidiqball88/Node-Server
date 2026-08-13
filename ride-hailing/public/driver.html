@@ -303,9 +303,12 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
     <div class="rr-point"><span class="rr-point-icon">🎯</span><span class="rr-point-text" id="rr-dropoff">—</span></div>
   </div>
   <div class="rr-meta">
-    <div class="rr-meta-item"><div class="rr-meta-label">Fare</div><div class="rr-meta-val" id="rr-fare">—</div></div>
+    <div class="rr-meta-item" style="background:#1a1a0a;border:1px solid #2a2a10"><div class="rr-meta-label">Customer's Offer</div><div class="rr-meta-val" id="rr-fare" style="color:#f5c518">—</div></div>
     <div class="rr-meta-item"><div class="rr-meta-label">Distance</div><div class="rr-meta-val" id="rr-dist">—</div></div>
     <div class="rr-meta-item"><div class="rr-meta-label">Vehicle</div><div class="rr-meta-val" id="rr-vehicle">—</div></div>
+  </div>
+  <div id="rr-payment-row" style="display:none;background:#0a0a0f;border-radius:8px;padding:.4rem .75rem;margin-bottom:.5rem;font-size:.8rem;color:#888;display:flex;align-items:center;gap:.4rem">
+    <span id="rr-pay-icon">💵</span><span id="rr-pay-label">Cash payment</span>
   </div>
   <div class="rr-actions">
     <button class="btn-reject" onclick="rejectRide()">✗ Reject</button>
@@ -493,12 +496,23 @@ function connectSocket() {
 }
 
 // ── Ride Request Popup ─────────────────────────────────────────────────────
+const PAY_ICONS = { cash: '💵', easypaisa: '📱', jazzcash: '🎵', wallet: '💰' };
+const PAY_NAMES = { cash: 'Cash on delivery', easypaisa: 'EasyPaisa', jazzcash: 'JazzCash', wallet: 'Wallet' };
+
 function showRideRequest(ride) {
   document.getElementById('rr-pickup').textContent  = ride.pickupLocation?.address  || `${ride.pickupLocation?.lat?.toFixed(4)}, ${ride.pickupLocation?.lng?.toFixed(4)}`;
   document.getElementById('rr-dropoff').textContent = ride.dropoffLocation?.address || `${ride.dropoffLocation?.lat?.toFixed(4)}, ${ride.dropoffLocation?.lng?.toFixed(4)}`;
-  document.getElementById('rr-fare').textContent    = `Rs ${ride.fare}`;
+  document.getElementById('rr-fare').textContent    = `Rs ${(ride.fare || 0).toLocaleString()}`;
   document.getElementById('rr-dist').textContent    = ride.distance ? `${ride.distance.toFixed(1)} km` : '—';
   document.getElementById('rr-vehicle').textContent = ride.vehicleType || '—';
+
+  // Payment method badge
+  const pm = ride.paymentMethod || 'cash';
+  const pmRow = document.getElementById('rr-payment-row');
+  document.getElementById('rr-pay-icon').textContent  = PAY_ICONS[pm] || '💵';
+  document.getElementById('rr-pay-label').textContent = PAY_NAMES[pm] || 'Cash on delivery';
+  pmRow.style.display = 'flex';
+
   document.getElementById('ride-request').style.display = 'block';
 
   // 30-second timer
