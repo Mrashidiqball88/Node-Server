@@ -449,7 +449,7 @@ textarea.support-input{resize:vertical;min-height:85px}
 <div id="ride-request">
   <div class="rr-header">
     <span class="rr-title">🚗 New Ride Request</span>
-    <span class="rr-timer" id="rr-timer">30s</span>
+    <span class="rr-timer" id="rr-timer">25s</span>
   </div>
   <div class="rr-route" id="rr-route">
     <div class="rr-point"><span class="rr-point-icon">📍</span><span class="rr-point-text" id="rr-pickup">—</span></div>
@@ -500,6 +500,8 @@ let requestTimer  = null;
 let locationWatch = null;
 let todayRides    = 0;
 let todayEarnings = 0;
+let alertAudioCtx = null;   // Web Audio context for ride alert
+let alertInterval = null;   // repeating beep interval
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -633,6 +635,10 @@ function bootApp() {
   connectSocket();
   loadStats();
   checkUnreadDriverTickets();
+  // Request browser notification permission so alerts fire even when tab is in background
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 }
 
 // ── Map ────────────────────────────────────────────────────────────────────
@@ -860,8 +866,8 @@ function showRideRequest(ride) {
 
   document.getElementById('ride-request').style.display = 'block';
 
-  // 30-second timer
-  let secs = 30;
+  // 25-second countdown timer
+  let secs = 25;
   document.getElementById('rr-timer').textContent = `${secs}s`;
   clearInterval(requestTimer);
   requestTimer = setInterval(() => {
@@ -871,15 +877,66 @@ function showRideRequest(ride) {
   }, 1000);
 
   showRideOnMap(ride);
+  startRideAlert(ride);
 }
 
 function hideRideRequest() {
   document.getElementById('ride-request').style.display = 'none';
   clearInterval(requestTimer);
+  stopRideAlert();
   pendingRide = null;
   document.getElementById('rr-counter-input').value = '';
   document.getElementById('rr-offer-sent').style.display = 'none';
   document.getElementById('rr-actions').style.display = 'flex';
+}
+
+// ── Ride Alert: Audio + Vibration + Browser Notification ───────────────────
+function startRideAlert(ride) {
+  // Repeating device vibration
+  if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+
+  // Web Audio API — loud two-tone alert beep
+  try {
+    alertAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBeep() {
+      if (!alertAudioCtx) return;
+      const osc  = alertAudioCtx.createOscillator();
+      const gain = alertAudioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(alertAudioCtx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1100, alertAudioCtx.currentTime);
+      osc.frequency.setValueAtTime(750,  alertAudioCtx.currentTime + 0.18);
+      osc.frequency.setValueAtTime(1100, alertAudioCtx.currentTime + 0.36);
+      gain.gain.setValueAtTime(1.0, alertAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, alertAudioCtx.currentTime + 0.6);
+      osc.start(alertAudioCtx.currentTime);
+      osc.stop(alertAudioCtx.currentTime + 0.6);
+    }
+    playBeep();
+    alertInterval = setInterval(playBeep, 1400);
+  } catch(e) { console.warn('Audio alert error:', e); }
+
+  // Browser push notification (works even if tab is backgrounded)
+  if (Notification.permission === 'granted' && ride) {
+    try {
+      new Notification('🚗 New Ride Request!', {
+        body: `📍 ${ride.pickupLocation?.address || 'Nearby'}\n💰 Rs ${(ride.fare || 0).toLocaleString()} · ${ride.distance ? ride.distance.toFixed(1) + ' km' : ''}`,
+        requireInteraction: true,
+        tag: 'ride-request'
+      });
+    } catch(e) {}
+  }
+}
+
+function stopRideAlert() {
+  clearInterval(alertInterval);
+  alertInterval = null;
+  if (alertAudioCtx) {
+    try { alertAudioCtx.close(); } catch(e) {}
+    alertAudioCtx = null;
+  }
+  if (navigator.vibrate) navigator.vibrate(0);
 }
 
 function rejectRide() {
@@ -888,25 +945,29 @@ function rejectRide() {
   showToast('Ride rejected', 'info');
 }
 
-// Accept at the customer's offered fare (no counter)
+// Accept at the customer's offered fare — direct acceptance, no re-confirmation needed
 async function acceptRide() {
   if (!pendingRide) return;
-  const rideId  = pendingRide.id;
-  const offeredPrice = pendingRide.fare;
+  const rideId = pendingRide.id;
   try {
-    await apiCall(`/api/rides/${rideId}/counter`, 'PATCH', { price: offeredPrice, type: 'accept' });
-    // Join ride room so we receive ride:accepted when customer picks us
-    socket.emit('ride:join', rideId);
-    sentOffer = { rideId };
-    pendingRide = null;
     clearInterval(requestTimer);
-    // Show offer-sent state in popup (keep map showing)
-    document.getElementById('rr-actions').style.display = 'none';
-    document.getElementById('rr-offer-sent').style.display = 'block';
-    document.getElementById('rr-timer').textContent = '⏳';
-    showToast('Offer sent! Waiting for customer…', 'success');
+    stopRideAlert();
+    pendingRide = null;
+    document.getElementById('ride-request').style.display = 'none';
+    document.getElementById('rr-counter-input').value = '';
+    // Call the direct accept endpoint — server immediately sets status → accepted
+    // and emits ride:accepted to the ride room + customer
+    await apiCall(`/api/rides/${rideId}/accept`, 'PATCH');
+    socket.emit('ride:join', rideId);
+    // Fetch the full ride and go straight to active panel (no customer re-confirmation)
+    const ride = await apiCall(`/api/rides/${rideId}`);
+    activeRide = ride;
+    showActivePanel(ride);
+    showRideOnMap(ride);
+    showToast('Ride accepted! Head to pickup 🚗', 'success');
   } catch (e) {
     showToast(e.message, 'error');
+    pendingRide = null;
   }
 }
 

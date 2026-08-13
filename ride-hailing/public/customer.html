@@ -255,6 +255,11 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .pickup-marker{background:#2266cc;border:3px solid #fff;width:18px;height:18px;border-radius:50%;box-shadow:0 0 8px rgba(34,102,204,.8)}
 .dropoff-marker{background:#cc6622;border:3px solid #fff;width:18px;height:18px;border-radius:50%;box-shadow:0 0 8px rgba(204,102,34,.8)}
 .driver-marker{font-size:24px;line-height:1}
+/* ── ETA Bar ── */
+.eta-bar{display:flex;align-items:center;gap:.5rem;background:#0a1a0a;border:1px solid #2d5a2d;border-radius:10px;padding:.5rem .75rem;margin:.45rem 0;font-size:.82rem;color:#a5d6a7}
+.eta-icon{font-size:1rem;flex-shrink:0}
+.eta-text{font-weight:600}
+.eta-dist{font-size:.72rem;color:#666;margin-left:auto;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -548,6 +553,11 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
   <!-- ── State: Driver matched ── -->
   <div id="ar-matched" style="display:none">
     <div class="ride-status-badge" style="background:#1a2a0a;border-color:#4caf50"><span class="ride-status-dot"></span><span id="ar-status-text">Driver on the way!</span></div>
+    <div class="eta-bar" id="ar-eta-bar" style="display:none">
+      <span class="eta-icon">🕐</span>
+      <span class="eta-text" id="ar-eta-text">Calculating arrival…</span>
+      <span class="eta-dist" id="ar-eta-dist"></span>
+    </div>
 
     <div class="matched-card">
       <div class="matched-top">
@@ -1431,11 +1441,44 @@ function connectToRideRoom(rideId) {
   });
 
   socket.on('driver:location', ({ lat, lng }) => {
+    // Update / create driver marker
     if (driverMarker) driverMarker.remove();
     driverMarker = L.marker([lat, lng], {
       icon: L.divIcon({ className: 'driver-marker', html: '🚗', iconSize: [28, 28], iconAnchor: [14, 14] })
     }).addTo(map);
+
+    // Pan map to show both driver and pickup
+    const pickup = activeRide?.pickupLocation;
+    if (pickup?.lat && pickup?.lng) {
+      try {
+        map.fitBounds(
+          L.latLngBounds([[lat, lng], [pickup.lat, pickup.lng]]),
+          { padding: [55, 55], maxZoom: 16, animate: true }
+        );
+      } catch(e) {}
+
+      // ETA — Haversine distance ÷ 30 km/h city speed
+      const distKm = haversineKm(lat, lng, pickup.lat, pickup.lng);
+      const etaMins = Math.max(1, Math.round(distKm / 30 * 60));
+      const etaBar  = document.getElementById('ar-eta-bar');
+      const etaTxt  = document.getElementById('ar-eta-text');
+      const etaDist = document.getElementById('ar-eta-dist');
+      if (etaBar && etaTxt) {
+        etaBar.style.display = 'flex';
+        etaTxt.textContent   = etaMins <= 1 ? 'Driver is almost here! 📍' : `Driver arriving in ~${etaMins} min${etaMins !== 1 ? 's' : ''}`;
+        if (etaDist) etaDist.textContent = `${distKm < 1 ? (distKm * 1000).toFixed(0) + ' m' : distKm.toFixed(1) + ' km'} away`;
+      }
+    }
   });
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ── Share Location ─────────────────────────────────────────────────────────
