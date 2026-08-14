@@ -33,10 +33,29 @@ const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-// path.resolve is used throughout (not path.join) so paths are always absolute
-// even when __dirname resolves to '.' in child-process spawn contexts.
+// Resolve the public directory absolutely — works in any CWD or spawn context.
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
 app.use(express.static(PUBLIC_DIR));
+
+// Pre-read HTML pages synchronously at startup so we never rely on sendFile's
+// stream/path behaviour in Cloud Run containers.  If a file is missing the
+// server refuses to start with a clear error rather than silently 500-ing.
+const fs = require('fs');
+function loadPage(file) {
+  const full = path.resolve(PUBLIC_DIR, file);
+  try {
+    return fs.readFileSync(full, 'utf8');
+  } catch (e) {
+    console.error(`[startup] Cannot load ${full}: ${e.message}`);
+    process.exit(1);
+  }
+}
+const PAGES = {
+  customer: loadPage('customer.html'),
+  driver:   loadPage('driver.html'),
+  admin:    loadPage('admin.html'),
+  download: loadPage('download.html'),
+};
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ride-hailing-secret-fallback';
 let dbConnected  = false;
@@ -1520,20 +1539,18 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', db: dbConnected ? 'connected' : 'testing-mode', ts: new Date().toISOString() });
 });
 
-// Page routes — '/' opens the customer app directly
-const sendPage = (file) => (_req, res, next) => {
-  res.sendFile(path.resolve(PUBLIC_DIR, file), (err) => { if (err) next(err); });
-};
-app.get('/customer', sendPage('customer.html'));
-app.get('/driver',   sendPage('driver.html'));
-app.get('/admin',    sendPage('admin.html'));
-app.get('/download', sendPage('download.html'));
-app.get('/',         sendPage('customer.html'));
+// Page routes — serve pre-loaded HTML; no file I/O on every request.
+const html = (page) => (_req, res) =>
+  res.setHeader('Content-Type', 'text/html; charset=utf-8') && res.send(PAGES[page]);
+app.get('/customer', html('customer'));
+app.get('/driver',   html('driver'));
+app.get('/admin',    html('admin'));
+app.get('/download', html('download'));
+app.get('/',         html('customer'));
 
-// Catch-all: serve customer app for any unmatched GET (prevents 404 on deep links)
-app.use((_req, res, next) => {
-  res.sendFile(path.resolve(PUBLIC_DIR, 'customer.html'), (err) => { if (err) next(err); });
-});
+// Catch-all: serve customer SPA for any unmatched path (deep-link support).
+app.use((_req, res) =>
+  res.setHeader('Content-Type', 'text/html; charset=utf-8') && res.send(PAGES.customer));
 
 // ── Express error handler — must have 4 params so Express treats it as error middleware ──
 // eslint-disable-next-line no-unused-vars
