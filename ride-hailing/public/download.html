@@ -101,6 +101,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark);color:#f
 .btn-copy{border:1px solid #2a4a88;background:#0f1c38;color:#6ab0ff;border-radius:7px;padding:.18rem .55rem;font-size:.7rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s}
 .btn-copy:hover{background:#1a2e55}
 .btn-copy.copied{background:#0d2a0d;border-color:#2d6030;color:#6fcf6f}
+.ios-safari-hint{font-size:.72rem;color:#8a9bbb;margin-top:.35rem;line-height:1.4}
 
 /* ── QR Code section (desktop only) ── */
 #qr-section{display:none;max-width:860px;margin:1.5rem auto 0;padding:0 1rem}
@@ -425,12 +426,16 @@ function init() {
     const fullUrl = `${appOrigin}${path}`;
     const el = document.getElementById(stepId);
     if (!el) return;
+    // x-safari-https:// opens the URL directly in Safari from any in-app browser on iOS.
+    // Strip the leading "https://" and prepend the custom scheme.
+    const safariHref = fullUrl.replace(/^https?:\/\//, 'x-safari-https://');
     el.innerHTML =
-      `Open <strong>Safari</strong> and navigate to:<br>` +
+      `Tap the link to open in <strong>Safari</strong>:<br>` +
       `<div class="ios-url-row">` +
-        `<a class="ios-url" href="${fullUrl}" target="_blank" rel="noopener">${fullUrl}</a>` +
+        `<a class="ios-url ios-safari-link" href="${safariHref}" rel="noopener">${fullUrl}</a>` +
         `<button class="btn-copy" id="${btnId}" onclick="copyUrl('${fullUrl}','${btnId}')">Copy link</button>` +
-      `</div>`;
+      `</div>` +
+      `<div class="ios-safari-hint">💡 If the link doesn't open Safari, copy it and paste it into Safari's address bar instead.</div>`;
   });
 }
 
