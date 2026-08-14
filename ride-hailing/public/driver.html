@@ -1055,6 +1055,18 @@ function connectSocket() {
   socket = io({ auth: { token } });
   socket.on('connect_error', e => console.warn('Socket error:', e.message));
 
+  // Fired on both initial connection AND every successful reconnect.
+  // Re-declare online status so the server restores the drivers-online room,
+  // and re-join the active ride room so location updates keep flowing.
+  socket.on('connect', () => {
+    if (isOnline) {
+      socket.emit('driver:status', { isOnline: true });
+    }
+    if (activeRide) {
+      socket.emit('ride:join', activeRide._id);
+    }
+  });
+
   // Admin replied to a support ticket
   socket.on('support:replied', ({ subject, reply }) => {
     showToast(`📋 Admin replied to: "${subject}"`, 'info');

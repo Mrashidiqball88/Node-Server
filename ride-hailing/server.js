@@ -1593,7 +1593,28 @@ io.on('connection', (socket) => {
 
   // Join personal notification room
   socket.join(`user:${id}`);
-  if (role === 'driver') socket.join('drivers-online');
+
+  // ── Driver: restore room memberships from DB on every (re)connect ──────────
+  // Socket.io rooms are process-memory only — they vanish on server restart.
+  // We persist isOnline and active ride state to MongoDB so we can restore both
+  // here without requiring the client to manually re-send status events first.
+  if (role === 'driver') {
+    Promise.all([
+      User.findById(id).select('isOnline accountStatus').lean().catch(() => null),
+      Ride.findOne({ driver: id, status: { $in: ['accepted', 'arrived', 'in-progress'] } })
+          .select('_id').lean().catch(() => null)
+    ]).then(([driver, activeRide]) => {
+      // Restore online room — only if DB says online and account is active
+      if (driver?.isOnline && driver.accountStatus === 'active') {
+        socket.join('drivers-online');
+      }
+      // Re-join the active ride room so location updates reach the passenger
+      if (activeRide) {
+        socket.join(`ride:${activeRide._id}`);
+        console.log(`Driver ${name} rejoined ride room ride:${activeRide._id} after reconnect`);
+      }
+    }).catch(() => {});
+  }
 
   socket.on('ride:join',  (rideId) => socket.join(`ride:${rideId}`));
   socket.on('ride:leave', (rideId) => socket.leave(`ride:${rideId}`));

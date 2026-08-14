@@ -1454,6 +1454,35 @@ function connectSocket() {
   socket = io({ auth: { token } });
   socket.on('connect_error', (e) => console.warn('Socket error:', e.message));
 
+  // Fired on both initial connection AND every successful reconnect.
+  // Re-join the active ride room and restore the last-known driver position
+  // from the persisted driverLocation field so the map is never blank after
+  // a brief server restart or network blip.
+  socket.on('connect', () => {
+    if (!activeRide) return;
+    socket.emit('ride:join', activeRide._id);
+    // Fetch persisted ride data to restore driver marker from last saved location
+    apiCall(`/api/rides/${activeRide._id}`).then(ride => {
+      const loc = ride?.driverLocation;
+      if (loc?.lat && loc?.lng && map) {
+        if (driverMarker) driverMarker.remove();
+        driverMarker = L.marker([loc.lat, loc.lng], {
+          icon: L.divIcon({ className: 'driver-marker', html: '🚗', iconSize: [28, 28], iconAnchor: [14, 14] })
+        }).addTo(map);
+        // Pan map to show driver position relative to pickup
+        const pu = activeRide.pickupLocation;
+        if (pu?.lat && pu?.lng) {
+          try {
+            map.fitBounds(
+              L.latLngBounds([[loc.lat, loc.lng], [pu.lat, pu.lng]]),
+              { padding: [55, 55], maxZoom: 16, animate: false }
+            );
+          } catch(e) {}
+        }
+      }
+    }).catch(() => {});
+  });
+
   // Admin replied to a support ticket
   socket.on('support:replied', ({ subject, reply }) => {
     showToast(`📋 Admin replied to: "${subject}"`, 'info');
