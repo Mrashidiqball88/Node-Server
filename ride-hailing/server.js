@@ -1738,64 +1738,66 @@ async function initVapidKeys() {
   console.warn('⚠  Using ephemeral VAPID keys — set VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY env vars for persistence');
 }
 
-async function start() {
+// ── Bind port immediately so healthcheck passes before DB connects ────────────
+// MongoDB connection happens asynchronously in the background AFTER the server
+// is already accepting requests.  This guarantees GET /api returns 200 within
+// milliseconds of process start, regardless of how long MongoDB takes.
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);
+  console.log(`   Customer App : /customer`);
+  console.log(`   Driver App   : /driver`);
+  console.log(`   DB Status    : Connecting…\n`);
+});
+
+async function connectDatabase() {
   const rawUri = process.env.MONGO_URI;
   if (!rawUri) {
     console.warn('⚠  MONGO_URI not set — running in testing mode (data not persisted)');
-  } else {
-    const uri = normalizeMongoUri(rawUri);
-    try {
-      await mongoose.connect(uri, {
-        serverSelectionTimeoutMS: 8000,
-        // Keep the connection alive across idle periods
-        heartbeatFrequencyMS: 10000,
-      });
+    return;
+  }
+  const uri = normalizeMongoUri(rawUri);
+  try {
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 8000,
+      heartbeatFrequencyMS: 10000,
+    });
+    dbConnected = true;
+    console.log('✓ MongoDB Atlas connected');
+
+    mongoose.connection.on('disconnected', () => {
+      dbConnected = false;
+      console.warn('⚠  MongoDB disconnected — Mongoose will auto-reconnect');
+    });
+    mongoose.connection.on('reconnected', () => {
       dbConnected = true;
-      console.log('✓ MongoDB Atlas connected');
+      console.log('✓ MongoDB reconnected');
+    });
+    mongoose.connection.on('error', (mongoErr) => {
+      console.error('MongoDB connection error:', mongoErr.message);
+    });
 
-      // ── Reconnection handlers — keep dbConnected flag accurate ──────────────
-      mongoose.connection.on('disconnected', () => {
-        dbConnected = false;
-        console.warn('⚠  MongoDB disconnected — Mongoose will auto-reconnect');
-      });
-      mongoose.connection.on('reconnected', () => {
-        dbConnected = true;
-        console.log('✓ MongoDB reconnected');
-      });
-      mongoose.connection.on('error', (mongoErr) => {
-        console.error('MongoDB connection error:', mongoErr.message);
-      });
-
-      // ── Migrate email index to sparse (one-time, safe to re-run) ──────────
-      // Old deployments have a non-sparse unique index that blocks null emails.
-      try {
-        const usersCol = mongoose.connection.collection('users');
-        const idxs = await usersCol.indexes();
-        const emailIdx = idxs.find(ix => ix.name === 'email_1');
-        if (emailIdx && !emailIdx.sparse) {
-          await usersCol.dropIndex('email_1');
-          await usersCol.createIndex({ email: 1 }, { unique: true, sparse: true });
-          console.log('✓ Email index migrated to sparse');
-        }
-      } catch (migrateErr) {
-        console.warn('Email index migration skipped:', migrateErr.message);
+    // Migrate email index to sparse (one-time, safe to re-run)
+    try {
+      const usersCol = mongoose.connection.collection('users');
+      const idxs = await usersCol.indexes();
+      const emailIdx = idxs.find(ix => ix.name === 'email_1');
+      if (emailIdx && !emailIdx.sparse) {
+        await usersCol.dropIndex('email_1');
+        await usersCol.createIndex({ email: 1 }, { unique: true, sparse: true });
+        console.log('✓ Email index migrated to sparse');
       }
-    } catch (err) {
-      console.warn('⚠  MongoDB unavailable, running in testing mode:', err.message);
+    } catch (migrateErr) {
+      console.warn('Email index migration skipped:', migrateErr.message);
     }
+  } catch (err) {
+    console.warn('⚠  MongoDB unavailable, running in testing mode:', err.message);
   }
 
   await initVapidKeys();
-
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);
-    console.log(`   Customer App : /customer`);
-    console.log(`   Driver App   : /driver`);
-    console.log(`   DB Status    : ${dbConnected ? 'Connected' : 'Testing Mode'}\n`);
-  });
 }
 
-start();
+// Start DB connection in background — never blocks the HTTP server
+connectDatabase().catch(err => console.error('connectDatabase error:', err));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Daily Subscription Deduction (runs at UTC midnight every day)
