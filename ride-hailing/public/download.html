@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>Download MyRide App</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --gold:#f5c518;--dark:#0a0a0f;--card:#13131a;--border:#222;
+  --green:#4caf50;--blue:#3b82f6;--wa:#25d366;--red:#ef4444;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark);color:#fff;min-height:100vh;padding-bottom:2rem}
+
+/* ── Header ── */
+.hdr{text-align:center;padding:2rem 1rem 1.25rem;border-bottom:1px solid var(--border)}
+.logo{font-size:2rem;font-weight:900;letter-spacing:-.02em}
+.logo span{color:var(--gold)}
+.tagline{color:#666;font-size:.85rem;margin-top:.25rem}
+
+/* ── Device banner ── */
+#device-banner{display:none;margin:1rem;border-radius:14px;padding:.7rem 1rem;font-size:.82rem;font-weight:600;text-align:center}
+#device-banner.android{background:#0d2010;border:1px solid #2d6030;color:#6fcf6f}
+#device-banner.ios{background:#0a0e1a;border:1px solid #1e3a6a;color:#6ab0ff}
+#device-banner.desktop{background:#1a1500;border:1px solid #3a2d00;color:#d4a800}
+
+/* ── App grid ── */
+.grid{display:grid;grid-template-columns:1fr;gap:1rem;padding:1rem;max-width:480px;margin:0 auto}
+@media(min-width:640px){.grid{grid-template-columns:1fr 1fr;max-width:860px}}
+
+/* ── App card ── */
+.app-card{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden}
+.card-header{padding:1.25rem 1.25rem .9rem;display:flex;align-items:center;gap:.85rem;border-bottom:1px solid var(--border)}
+.app-icon{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0}
+.app-icon.customer{background:linear-gradient(135deg,#1a1000,#3a2800);border:1px solid #4a3800}
+.app-icon.driver{background:linear-gradient(135deg,#001a0d,#003020);border:1px solid #005030}
+.card-title{font-size:1.1rem;font-weight:800}
+.card-sub{font-size:.75rem;color:#666;margin-top:.15rem}
+
+/* ── Install sections ── */
+.install-sections{padding:1rem 1.25rem}
+
+/* Android section */
+.android-section{margin-bottom:1rem}
+.section-label{display:flex;align-items:center;gap:.5rem;font-size:.7rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.65rem}
+.section-label .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-android{background:#6fcf6f}
+.dot-ios{background:#6ab0ff}
+.dot-share{background:var(--wa)}
+
+/* Primary install button */
+.btn-install{width:100%;border:none;border-radius:12px;padding:.85rem 1rem;font-size:.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.55rem;transition:all .2s;text-decoration:none}
+.btn-install.android-btn{background:var(--green);color:#0a1a0a}
+.btn-install.android-btn:hover{background:#5dc55d}
+.btn-install.android-btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-install.pwa-ready{background:#1a3a1a;border:2px solid var(--green);color:var(--green)}
+
+/* iOS steps */
+.ios-steps{background:#0a0e18;border:1px solid #1a2540;border-radius:12px;padding:.85rem}
+.ios-steps-title{font-size:.78rem;font-weight:700;color:#6ab0ff;margin-bottom:.65rem;display:flex;align-items:center;gap:.4rem}
+.ios-step{display:flex;align-items:flex-start;gap:.6rem;margin-bottom:.55rem}
+.ios-step:last-child{margin-bottom:0}
+.step-num{width:22px;height:22px;border-radius:50%;background:#1a2e55;border:1px solid #2a4a88;color:#6ab0ff;font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:.05rem}
+.step-text{font-size:.8rem;color:#a0b8d8;line-height:1.45}
+.step-icon{font-size:1rem;display:inline}
+
+/* Success chip */
+.install-success{display:none;background:#0a2010;border:1px solid #2d6030;border-radius:10px;padding:.6rem .85rem;font-size:.8rem;color:var(--green);text-align:center;margin-top:.5rem}
+
+/* Divider */
+.or-divider{display:flex;align-items:center;gap:.5rem;margin:.75rem 0;color:#333;font-size:.72rem}
+.or-divider::before,.or-divider::after{content:'';flex:1;height:1px;background:#222}
+
+/* Share section */
+.share-section{padding:.25rem 1.25rem 1.25rem}
+.btn-wa{width:100%;background:var(--wa);color:#0a1a10;border:none;border-radius:12px;padding:.8rem 1rem;font-size:.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.55rem;transition:opacity .2s;text-decoration:none}
+.btn-wa:hover{opacity:.9}
+
+/* ── Instruction block (desktop / fallback) ── */
+.manual-block{background:#111118;border:1px solid #1e1e2e;border-radius:12px;padding:.85rem}
+.manual-title{font-size:.78rem;font-weight:700;color:#888;margin-bottom:.55rem}
+.manual-step{display:flex;gap:.5rem;font-size:.78rem;color:#666;margin-bottom:.35rem;align-items:flex-start}
+.manual-step:last-child{margin-bottom:0}
+.manual-step b{color:#aaa;flex-shrink:0}
+
+/* ── QR hint ── */
+.qr-row{display:flex;align-items:center;gap:.65rem;background:#0a0a14;border:1px solid #1a1a2a;border-radius:12px;padding:.75rem;margin-bottom:1rem}
+.qr-icon{font-size:2rem;flex-shrink:0}
+.qr-text{font-size:.78rem;color:#666;line-height:1.45}
+.qr-text strong{color:#aaa;display:block;margin-bottom:.1rem}
+
+/* ── Footer ── */
+.footer{text-align:center;padding:1.5rem 1rem 0;color:#333;font-size:.75rem}
+.footer a{color:#555;text-decoration:none}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="logo">My<span>Ride</span></div>
+  <div class="tagline">Install the app on your phone — no store required</div>
+</div>
+
+<!-- Device detection banner -->
+<div id="device-banner"></div>
+
+<!-- Desktop QR hint (hidden on mobile) -->
+<div id="desktop-hint" style="display:none;padding:.75rem 1rem 0;max-width:480px;margin:0 auto">
+  <div class="qr-row">
+    <div class="qr-icon">📱</div>
+    <div class="qr-text">
+      <strong>Open on your phone for best experience</strong>
+      Visit <b>this page</b> on your Android or iPhone and tap the install button to add MyRide to your home screen.
+    </div>
+  </div>
+</div>
+
+<!-- App cards -->
+<div class="grid">
+
+  <!-- ── CUSTOMER CARD ── -->
+  <div class="app-card">
+    <div class="card-header">
+      <div class="app-icon customer">🚖</div>
+      <div>
+        <div class="card-title">Customer App</div>
+        <div class="card-sub">Book rides · Track driver · Rate trips</div>
+      </div>
+    </div>
+
+    <div class="install-sections">
+
+      <!-- Android -->
+      <div class="android-section">
+        <div class="section-label"><span class="dot dot-android"></span>Android</div>
+        <button class="btn-install android-btn" id="cust-android-btn" onclick="installPwa('customer')">
+          <span>📲</span> Install Customer App
+        </button>
+        <div class="install-success" id="cust-android-success">✅ App added to your home screen!</div>
+        <div id="cust-android-manual" style="display:none;margin-top:.65rem">
+          <div class="manual-block">
+            <div class="manual-title">Install manually in Chrome:</div>
+            <div class="manual-step"><b>1.</b> Tap the ⋮ menu (top-right)</div>
+            <div class="manual-step"><b>2.</b> Tap "Add to Home screen"</div>
+            <div class="manual-step"><b>3.</b> Tap "Add" to confirm</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="or-divider">or</div>
+
+      <!-- iOS -->
+      <div>
+        <div class="section-label"><span class="dot dot-ios"></span>iPhone / iPad</div>
+        <div class="ios-steps" id="cust-ios-steps">
+          <div class="ios-steps-title">🍎 Add to Home Screen</div>
+          <div class="ios-step">
+            <div class="step-num">1</div>
+            <div class="step-text">Open <strong>safari.apple.com</strong> and go to <strong>/customer</strong></div>
+          </div>
+          <div class="ios-step">
+            <div class="step-num">2</div>
+            <div class="step-text">Tap the <span class="step-icon">⎙</span> <strong>Share</strong> button at the bottom of Safari</div>
+          </div>
+          <div class="ios-step">
+            <div class="step-num">3</div>
+            <div class="step-text">Scroll down and tap <strong>"Add to Home Screen"</strong></div>
+          </div>
+          <div class="ios-step">
+            <div class="step-num">4</div>
+            <div class="step-text">Tap <strong>"Add"</strong> — MyRide appears on your home screen like a native app ✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp share -->
+    <div class="share-section">
+      <div class="section-label" style="padding:0 0 .65rem"><span class="dot dot-share"></span>Share</div>
+      <a class="btn-wa" id="cust-wa-btn" href="#" onclick="shareWa('customer');return false">
+        <span>💬</span> Share Customer App Link
+      </a>
+    </div>
+  </div>
+
+  <!-- ── DRIVER CARD ── -->
+  <div class="app-card">
+    <div class="card-header">
+      <div class="app-icon driver">🚗</div>
+      <div>
+        <div class="card-title">Driver App</div>
+        <div class="card-sub">Accept rides · Track earnings · Go online</div>
+      </div>
+    </div>
+
+    <div class="install-sections">
+
+      <!-- Android -->
+      <div class="android-section">
+        <div class="section-label"><span class="dot dot-android"></span>Android</div>
+        <button class="btn-install android-btn" id="drv-android-btn" onclick="installPwa('driver')">
+          <span>📲</span> Install Driver App
+        </button>
+        <div class="install-success" id="drv-android-success">✅ App added to your home screen!</div>
+        <div id="drv-android-manual" style="display:none;margin-top:.65rem">
+          <div class="manual-block">
+            <div class="manual-title">Install manually in Chrome:</div>
+            <div class="manual-step"><b>1.</b> Tap the ⋮ menu (top-right)</div>
+            <div class="manual-step"><b>2.</b> Tap "Add to Home screen"</div>
+            <div class="manual-step"><b>3.</b> Tap "Add" to confirm</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="or-divider">or</div>
+
+      <!-- iOS -->
+      <div>
+        <div class="section-label"><span class="dot dot-ios"></span>iPhone / iPad</div>
+        <div class="ios-steps" id="drv-ios-steps">
+          <div class="ios-steps-title">🍎 Add to Home Screen</div>
+          <div class="ios-step">
+            <div class="step-num">1</div>
+            <div class="step-text">Open <strong>Safari</strong> and go to <strong>/driver</strong></div>
+          </div>
+          <div class="ios-step">
+            <div class="step-num">2</div>
+            <div class="step-text">Tap the <span class="step-icon">⎙</span> <strong>Share</strong> button at the bottom of Safari</div>
+          </div>
+          <div class="ios-step">
+            <div class="step-num">3</div>
+            <div class="step-text">Scroll down and tap <strong>"Add to Home Screen"</strong></div>
+          </div>
+          <div class="ios-step">
+            <div class="step-num">4</div>
+            <div class="step-text">Tap <strong>"Add"</strong> — MyRide Driver appears on your home screen ✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp share -->
+    <div class="share-section">
+      <div class="section-label" style="padding:0 0 .65rem"><span class="dot dot-share"></span>Share</div>
+      <a class="btn-wa" id="drv-wa-btn" href="#" onclick="shareWa('driver');return false">
+        <span>💬</span> Share Driver App Link
+      </a>
+    </div>
+  </div>
+
+</div><!-- /grid -->
+
+<div class="footer">
+  <p>MyRide &copy; 2026 &nbsp;·&nbsp; <a href="/customer">Open Customer App</a> &nbsp;·&nbsp; <a href="/driver">Open Driver App</a></p>
+</div>
+
+<script>
+// ── Device detection ──────────────────────────────────────────────────────────
+const ua      = navigator.userAgent;
+const isIos   = /iphone|ipad|ipod/i.test(ua);
+const isAndroid = /android/i.test(ua);
+const isMobile  = isIos || isAndroid;
+const appOrigin = location.origin;  // e.g. https://myride.replit.app
+
+// ── PWA deferred install prompts (one per app, captured on that app's page) ──
+// On this download page we capture its own prompt and navigate to the target
+// app if the user picks it; the SW covers the full scope so install works.
+let _custPrompt = null;
+let _drvPrompt  = null;
+
+// We capture a single prompt here (the page's own install event).
+// When the user taps "Install Customer/Driver", we navigate them to that app
+// page first, which has its own manifest & will trigger a fresh prompt.
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  // store and update buttons
+  _custPrompt = e;
+  _drvPrompt  = e;
+  updateAndroidButtons(true);
+});
+
+function updateAndroidButtons(ready) {
+  ['cust','drv'].forEach(prefix => {
+    const btn = document.getElementById(`${prefix}-android-btn`);
+    if (!btn) return;
+    if (ready) {
+      btn.classList.add('pwa-ready');
+      btn.innerHTML = '<span>🟢</span> Ready to Install — Tap Here';
+    }
+  });
+}
+
+// ── Install ──────────────────────────────────────────────────────────────────
+async function installPwa(app) {
+  const prefix     = app === 'customer' ? 'cust' : 'drv';
+  const targetPath = app === 'customer' ? '/customer' : '/driver';
+  const prompt     = app === 'customer' ? _custPrompt : _drvPrompt;
+
+  if (prompt) {
+    // Native Chrome install dialog
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome === 'accepted') {
+      document.getElementById(`${prefix}-android-success`).style.display = 'block';
+      document.getElementById(`${prefix}-android-btn`).disabled = true;
+    }
+  } else {
+    // No prompt captured — navigate to the app page so Chrome can capture it there
+    window.location.href = targetPath;
+  }
+}
+
+// ── WhatsApp share ────────────────────────────────────────────────────────────
+function shareWa(app) {
+  const label = app === 'customer' ? 'Customer' : 'Driver';
+  const path  = app === 'customer' ? '/customer' : '/driver';
+  const url   = `${appOrigin}${path}`;
+  const text  = encodeURIComponent(
+    `📱 *MyRide ${label} App*\n` +
+    `Install it instantly — no App Store needed!\n\n` +
+    `🔗 ${url}\n\n` +
+    `Open the link in your phone browser, then tap ⋮ → "Add to Home Screen" (Android) or Share → "Add to Home Screen" (iPhone).`
+  );
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+// ── Page init ─────────────────────────────────────────────────────────────────
+function init() {
+  const banner = document.getElementById('device-banner');
+
+  if (isAndroid) {
+    banner.className = 'android';
+    banner.textContent = '✅ Android detected — tap "Install" below to add MyRide to your home screen';
+    banner.style.display = 'block';
+    // Hide iOS steps on Android
+    document.querySelectorAll('.or-divider').forEach(el => el.style.display = 'none');
+    document.getElementById('cust-ios-steps').style.display = 'none';
+    document.getElementById('drv-ios-steps').style.display  = 'none';
+    // Show manual fallback always (Chrome may need it if prompt not fired yet)
+    document.getElementById('cust-android-manual').style.display = 'block';
+    document.getElementById('drv-android-manual').style.display  = 'block';
+  } else if (isIos) {
+    banner.className = 'ios';
+    banner.textContent = '🍎 iPhone detected — follow the Safari steps below to install MyRide';
+    banner.style.display = 'block';
+    // Hide Android buttons on iOS (no prompt available)
+    document.querySelectorAll('.android-section').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.or-divider').forEach(el => el.style.display = 'none');
+    // Highlight iOS steps
+    document.getElementById('cust-ios-steps').style.border = '1px solid #2a5080';
+    document.getElementById('drv-ios-steps').style.border  = '1px solid #2a5080';
+  } else {
+    // Desktop
+    banner.className = 'desktop';
+    banner.textContent = '💻 Open this page on your phone to install MyRide as a native app';
+    banner.style.display = 'block';
+    document.getElementById('desktop-hint').style.display = 'block';
+  }
+
+  // Build WhatsApp links upfront (visible as soon as JS runs)
+  const custUrl = `${appOrigin}/customer`;
+  const drvUrl  = `${appOrigin}/driver`;
+  ['cust-wa-btn', 'drv-wa-btn'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute('href', '#');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
