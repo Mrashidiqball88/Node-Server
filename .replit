@@ -47,8 +47,8 @@ outputType = "console"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
-build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev && cd ../artifacts/api-server && node ./build.mjs"]
+run = ["bash", "-c", "cd ride-hailing && exec node server.js"]
+build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev"]
 
 [postMerge]
 path = "scripts/post-merge.sh"

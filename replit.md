@@ -38,7 +38,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Production deployments run `ride-hailing/server.js` directly (see `[deployment]` in `.replit`), NOT the api-server launcher. The old spawn-launcher indirection caused health-check timeouts on `/api`. `artifacts/api-server` is the dev workflow only.
 
 ## Pointers
 
