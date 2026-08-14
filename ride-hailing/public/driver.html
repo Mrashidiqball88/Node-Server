@@ -680,35 +680,59 @@ function prevRegStep() {
   document.getElementById('auth-error').textContent = '';
 }
 
-// ── Image Compression ──────────────────────────────────────────────────────
-function compressImage(file, maxDim = 1024, quality = 0.7) {
+// ── Eager image compression ────────────────────────────────────────────────
+// Compressed base64 strings are stored here as soon as a file is picked,
+// so doRegister() never has to wait and always sends small payloads.
+const _photos = {};   // { inputId: base64DataUrl }
+
+/**
+ * Compress a File using an off-screen canvas.
+ * Max dimension 800 px, JPEG quality 0.7 → ~150-250 KB from a 5 MB photo.
+ */
+function compressImage(file, maxWidth = 800, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read image file'));
-    reader.onload = e => {
+    reader.onerror = () => reject(new Error('Could not read the selected file'));
+    reader.onload = ev => {
       const img = new Image();
-      img.onerror = () => reject(new Error('Failed to load image'));
+      img.onerror = () => reject(new Error('Could not decode image'));
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        // Scale down so neither dimension exceeds maxDim; never upscale
-        const scale  = Math.min(1, maxDim / Math.max(img.width, img.height));
+        // Scale down so the longest side ≤ maxWidth; never upscale
+        const scale   = Math.min(1, maxWidth / Math.max(img.width, img.height));
+        const canvas  = document.createElement('canvas');
         canvas.width  = Math.round(img.width  * scale);
         canvas.height = Math.round(img.height * scale);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        // Sanity-check: warn in console if still large after compression
+        const kb = Math.round(dataUrl.length * 0.75 / 1024);
+        if (kb > 500) console.warn(`compressImage: ${file.name} still ${kb} KB after compression`);
+        resolve(dataUrl);
       };
-      img.src = e.target.result;
+      img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
   });
 }
 
-function previewPhoto(input, previewId) {
+/**
+ * Called by each file input's onchange.
+ * Compresses immediately, caches the result, and shows the preview image.
+ */
+async function previewPhoto(input, previewId) {
+  const file    = input.files[0];
   const preview = document.getElementById(previewId);
-  if (!input.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
-  reader.readAsDataURL(input.files[0]);
+  if (!file) return;
+  // Show a loading state on the preview element
+  if (preview) { preview.style.opacity = '0.4'; preview.style.display = 'block'; }
+  try {
+    const compressed = await compressImage(file);
+    _photos[input.id]  = compressed;           // cache for doRegister()
+    if (preview) { preview.src = compressed; preview.style.opacity = '1'; }
+  } catch (e) {
+    document.getElementById('auth-error').textContent = e.message;
+    if (preview) preview.style.opacity = '1';
+  }
 }
 
 async function doRegister() {
@@ -719,25 +743,34 @@ async function doRegister() {
   const vehiclePlate = document.getElementById('r-plate').value.trim().toUpperCase();
   const pass         = document.getElementById('r-pass').value;
 
-  const profileFile = document.getElementById('r-profile-photo').files[0];
-  const licenseFile = document.getElementById('r-license-photo').files[0];
-  const cnicFFile   = document.getElementById('r-cnic-front').files[0];
-  const cnicBFile   = document.getElementById('r-cnic-back').files[0];
-
   const errEl = document.getElementById('auth-error');
-  if (!profileFile) { errEl.textContent = 'Profile photo is required';        return; }
-  if (!licenseFile) { errEl.textContent = 'Driving license photo is required'; return; }
-  if (!cnicFFile)   { errEl.textContent = 'CNIC Front photo is required';      return; }
-  if (!cnicBFile)   { errEl.textContent = 'CNIC Back photo is required';       return; }
 
-  errEl.textContent = 'Compressing photos…';
+  // Use pre-compressed cache; fall back to compressing now if user navigated
+  // back and re-selected a file (edge case).
+  const getPhoto = async (inputId, label) => {
+    if (_photos[inputId]) return _photos[inputId];
+    const file = document.getElementById(inputId)?.files[0];
+    if (!file) throw new Error(`${label} is required`);
+    const compressed = await compressImage(file);
+    _photos[inputId] = compressed;
+    return compressed;
+  };
+
+  errEl.textContent = '';
   try {
+    errEl.textContent = 'Preparing photos…';
     const [profilePhoto, licensePhoto, cnicFront, cnicBack] = await Promise.all([
-      compressImage(profileFile),
-      compressImage(licenseFile),
-      compressImage(cnicFFile),
-      compressImage(cnicBFile)
+      getPhoto('r-profile-photo', 'Profile photo'),
+      getPhoto('r-license-photo', 'Driving license photo'),
+      getPhoto('r-cnic-front',    'CNIC Front photo'),
+      getPhoto('r-cnic-back',     'CNIC Back photo'),
     ]);
+
+    // Validate non-photo fields (photos already confirmed above)
+    if (!name)  { errEl.textContent = 'Full name is required';    return; }
+    if (!phone) { errEl.textContent = 'Phone number is required'; return; }
+    if (pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
+
     errEl.textContent = 'Creating account…';
     const res = await apiCall('/api/auth/register', 'POST', {
       name, phone, password: pass,
