@@ -27,6 +27,13 @@ const path     = require('path');
 const webpush  = require('web-push');
 
 const app    = express();
+app.get('/api', (req, res) => {
+  res.status(200).send('OK');
+});
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
