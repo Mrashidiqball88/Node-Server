@@ -28,14 +28,16 @@ const webpush  = require('web-push');
 
 // ── 2. APP & SERVER INITIALIZATION ───────────────────────────────────────
 const app    = express();
-const server = http.createServer(app);
-const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
-// ── 3. HEALTHCHECK ROUTES — registered first, zero dependencies ──────────
-// Deployment probes hit /health and /api immediately on startup.
-// These must return 200 with zero dependencies — no DB, no middleware.
+// ── 3. HEALTHCHECK ROUTES — FIRST lines after express(), zero dependencies
+// Replit deployment probes / immediately on startup; this must win before
+// any other route, middleware, or DB work is registered.
+app.get('/',       (_req, res) => res.status(200).send('OK'));
 app.get('/health', (_req, res) => res.status(200).send('OK'));
 app.get('/api',    (_req, res) => res.status(200).json({ status: 'ok' }));
+
+const server = http.createServer(app);
+const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
 // ── 4. START LISTENING IMMEDIATELY ───────────────────────────────────────
 // Bind the port right after healthchecks so the OS accepts connections and
