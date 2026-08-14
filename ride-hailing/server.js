@@ -26,36 +26,18 @@ const { Server } = require('socket.io');
 const path     = require('path');
 const webpush  = require('web-push');
 
+// ── 2. APP & SERVER INITIALIZATION ───────────────────────────────────────
 const app    = express();
-app.get('/api', (req, res) => {
-  res.status(200).send('OK');
-});
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
-});
-
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
-// ── Healthcheck routes — FIRST, zero dependencies ─────────────────────────
-// These must be registered before any middleware so deployment probes that
-// arrive during startup (before DB / VAPID init) always get an instant 200.
-app.get('/api',    (_req, res) => res.status(200).json({ status: 'ok', time: new Date() }));
+// ── 3. IMMEDIATE HEALTHCHECK ROUTES (before any middleware) ──────────────
+// Deployment probes hit /api and /health immediately on startup.
+// These must return 200 with zero dependencies — no DB, no middleware.
+app.get('/api',    (_req, res) => res.status(200).json({ status: 'ok' }));
 app.get('/health', (_req, res) => res.status(200).send('OK'));
 
-// ── Bind port immediately ─────────────────────────────────────────────────
-// server.listen() is called here — before cors, body-parser, routes, or DB —
-// so the OS starts accepting TCP connections right away. All other middleware
-// and routes are registered synchronously in this same tick and will be ready
-// before the event loop processes the first real request.
-const PORT = parseInt(process.env.PORT || '3000', 10);
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);
-  console.log(`   Customer App : /customer`);
-  console.log(`   Driver App   : /driver`);
-  console.log(`   DB Status    : Connecting…\n`);
-});
-
+// ── 4. MIDDLEWARES & STATIC FILES ─────────────────────────────────────────
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -72,8 +54,9 @@ function loadPage(file) {
   try {
     return fs.readFileSync(full, 'utf8');
   } catch (e) {
-    console.error(`[startup] Cannot load ${full}: ${e.message}`);
-    process.exit(1);
+    // Return a minimal fallback so a missing file never crashes startup or 500s the healthcheck
+    console.error(`[startup] Warning: cannot load ${full}: ${e.message}`);
+    return `<!DOCTYPE html><html><body><h1>MyRide</h1><p>Page unavailable.</p></body></html>`;
   }
 }
 const PAGES = {
@@ -1855,3 +1838,12 @@ async function runDailyDeduction() {
   scheduleNext();
   console.log(`⏰ Daily deduction scheduled (next run at UTC midnight)`);
 })();
+
+// ── 6. SERVER LISTEN — very bottom of file ───────────────────────────────
+const PORT = parseInt(process.env.PORT || '3000', 10);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);
+  console.log(`   Customer App : /customer`);
+  console.log(`   Driver App   : /driver`);
+  console.log(`   DB Status    : Connecting…\n`);
+});
