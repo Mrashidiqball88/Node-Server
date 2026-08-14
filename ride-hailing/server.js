@@ -30,6 +30,25 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
+// ── Healthcheck routes — FIRST, zero dependencies ─────────────────────────
+// These must be registered before any middleware so deployment probes that
+// arrive during startup (before DB / VAPID init) always get an instant 200.
+app.get('/api',    (_req, res) => res.status(200).json({ status: 'ok', time: new Date() }));
+app.get('/health', (_req, res) => res.status(200).send('OK'));
+
+// ── Bind port immediately ─────────────────────────────────────────────────
+// server.listen() is called here — before cors, body-parser, routes, or DB —
+// so the OS starts accepting TCP connections right away. All other middleware
+// and routes are registered synchronously in this same tick and will be ready
+// before the event loop processes the first real request.
+const PORT = parseInt(process.env.PORT || '3000', 10);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);
+  console.log(`   Customer App : /customer`);
+  console.log(`   Driver App   : /driver`);
+  console.log(`   DB Status    : Connecting…\n`);
+});
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -1697,8 +1716,6 @@ io.on('connection', (socket) => {
 // Start
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
-
 async function initVapidKeys() {
   // Prefer explicit env-var keys (set once, rotate rarely)
   const envPublic  = process.env.VAPID_PUBLIC_KEY;
@@ -1737,17 +1754,6 @@ async function initVapidKeys() {
   global._vapidPublicKey = keys.publicKey;
   console.warn('⚠  Using ephemeral VAPID keys — set VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY env vars for persistence');
 }
-
-// ── Bind port immediately so healthcheck passes before DB connects ────────────
-// MongoDB connection happens asynchronously in the background AFTER the server
-// is already accepting requests.  This guarantees GET /api returns 200 within
-// milliseconds of process start, regardless of how long MongoDB takes.
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);
-  console.log(`   Customer App : /customer`);
-  console.log(`   Driver App   : /driver`);
-  console.log(`   DB Status    : Connecting…\n`);
-});
 
 async function connectDatabase() {
   const rawUri = process.env.MONGO_URI;
