@@ -40,7 +40,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
 /* ── App Layout ── */
 #app{display:none;flex-direction:column;height:100dvh}
-#map{flex:1;z-index:1;width:100%;min-height:0}
+#map{flex:1;z-index:1;width:100%;min-height:0;position:relative;overflow:hidden}
 
 /* ── Header ── */
 .header{background:#13131a;border-bottom:1px solid #222;padding:.75rem 1rem;display:flex;align-items:center;justify-content:space-between;z-index:10;flex-shrink:0}
@@ -909,9 +909,17 @@ function bootApp() {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('avatar-init').textContent = (user.name || '?')[0].toUpperCase();
   document.getElementById('header-name').textContent = user.name || user.phone || user.email || 'User';
-  initMap(); connectSocket(); loadRideHistory();
+  connectSocket(); loadRideHistory();
   loadEmergencyContacts();   // pre-cache for SOS
   checkUnreadCustTickets();  // badge for unread admin replies
+  // Double rAF ensures the browser has fully painted the flex layout before
+  // Leaflet measures #map — fixes the 0×0 container race condition.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    initMap();
+    // Belt-and-suspenders: re-invalidate at 300 ms and 700 ms for iOS Safari
+    setTimeout(() => map?.invalidateSize(), 300);
+    setTimeout(() => map?.invalidateSize(), 700);
+  }));
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────
@@ -921,9 +929,15 @@ function initMap() {
   L.tileLayer(TILE_URL, TILE_OPTS).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  // Guarantee tiles fill the container on first paint and on any resize
-  setTimeout(() => map.invalidateSize(), 200);
+  // Staggered invalidations catch every rendering phase (especially iOS Safari)
+  requestAnimationFrame(() => map.invalidateSize());
+  setTimeout(() => map.invalidateSize(), 150);
+  setTimeout(() => map.invalidateSize(), 500);
   window.addEventListener('resize', () => map.invalidateSize());
+  // Re-fire when the page becomes visible again (e.g. switching tabs/apps)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') map?.invalidateSize();
+  });
 
   map.on('click', (e) => {
     const { lat, lng } = e.latlng;
@@ -1733,8 +1747,8 @@ function switchAppTab(name) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'rides') loadRideHistory();
-  // Repaint map tiles whenever the bottom panel resizes
-  setTimeout(() => map?.invalidateSize(), 50);
+  // Repaint map tiles after the bottom panel reflows (50 ms is too short)
+  setTimeout(() => map?.invalidateSize(), 150);
 }
 
 

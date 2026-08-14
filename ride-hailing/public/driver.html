@@ -39,7 +39,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 
 /* ── App Layout ── */
 #app{display:none;flex-direction:column;height:100dvh}
-#map{flex:1;z-index:1;width:100%;min-height:0}
+#map{flex:1;z-index:1;width:100%;min-height:0;position:relative;overflow:hidden}
 
 /* ── Header ── */
 .header{background:#0d1117;border-bottom:1px solid #1e3a5f;padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;z-index:10;flex-shrink:0}
@@ -865,7 +865,6 @@ function bootApp() {
       avatarEl.textContent = (user.name || 'D')[0].toUpperCase();
     }
   }
-  initMap();
   connectSocket();
   loadStats();
   checkUnreadDriverTickets();
@@ -873,6 +872,13 @@ function bootApp() {
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
   }
+  // Double rAF ensures the browser has fully painted the flex layout before
+  // Leaflet measures #map — fixes the 0×0 container race condition.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    initMap();
+    setTimeout(() => map?.invalidateSize(), 300);
+    setTimeout(() => map?.invalidateSize(), 700);
+  }));
   // Show pending approval card if not yet approved
   const pendingCard = document.getElementById('pending-card');
   const onlineBar   = document.querySelector('.online-bar');
@@ -899,9 +905,15 @@ function initMap() {
   }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  // Guarantee tiles fill the container on first paint and on any resize
-  setTimeout(() => map.invalidateSize(), 200);
+  // Staggered invalidations catch every rendering phase (especially iOS Safari)
+  requestAnimationFrame(() => map.invalidateSize());
+  setTimeout(() => map.invalidateSize(), 150);
+  setTimeout(() => map.invalidateSize(), 500);
   window.addEventListener('resize', () => map.invalidateSize());
+  // Re-fire when the page becomes visible again (e.g. switching tabs/apps)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') map?.invalidateSize();
+  });
 
   // Watch driver's own location
   if (navigator.geolocation) {
@@ -1354,8 +1366,8 @@ function switchBottomTab(tab) {
     document.getElementById('payments-panel').style.display = 'block';
     loadPayments();
   }
-  // Repaint map tiles after panel layout shift
-  setTimeout(() => map?.invalidateSize(), 50);
+  // Repaint map tiles after panel reflow (50 ms is too short for iOS)
+  setTimeout(() => map?.invalidateSize(), 150);
 }
 
 // ── Payments ───────────────────────────────────────────────────────────────
