@@ -1534,23 +1534,46 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Health endpoints — deployment probe checks both /api and /api/health
-app.get('/api',        (_req, res) => res.json({ status: 'ok' }));
-app.get('/api/health', (_req, res) => {
+app.get('/api', function(_req, res) { res.json({ status: 'ok' }); });
+app.get('/api/health', function(_req, res) {
   res.json({ status: 'ok', db: dbConnected ? 'connected' : 'testing-mode', ts: new Date().toISOString() });
 });
 
-// Page routes — serve pre-loaded HTML; no file I/O on every request.
-const html = (page) => (_req, res) =>
-  res.setHeader('Content-Type', 'text/html; charset=utf-8') && res.send(PAGES[page]);
-app.get('/customer', html('customer'));
-app.get('/driver',   html('driver'));
-app.get('/admin',    html('admin'));
-app.get('/download', html('download'));
-app.get('/',         html('customer'));
+// Diagnostic: confirm PAGES are loaded in this container instance
+app.get('/api/pages-status', function(_req, res) {
+  res.json(Object.fromEntries(
+    Object.entries(PAGES).map(([k, v]) => [k, { loaded: !!v, bytes: v ? v.length : 0 }])
+  ));
+});
+
+// Page routes — serve pre-loaded HTML with explicit statements (no && chain).
+function servePage(page) {
+  return function(_req, res, next) {
+    try {
+      var content = PAGES[page];
+      if (!content) {
+        console.error('[servePage] PAGES["' + page + '"] is empty — startup load failed silently');
+        return res.status(500).json({ error: 'page not loaded' });
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(content);
+    } catch (err) {
+      console.error('[servePage] error serving page "' + page + '":', err);
+      next(err);
+    }
+  };
+}
+app.get('/customer', servePage('customer'));
+app.get('/driver',   servePage('driver'));
+app.get('/admin',    servePage('admin'));
+app.get('/download', servePage('download'));
+app.get('/',         servePage('customer'));
 
 // Catch-all: serve customer SPA for any unmatched path (deep-link support).
-app.use((_req, res) =>
-  res.setHeader('Content-Type', 'text/html; charset=utf-8') && res.send(PAGES.customer));
+app.use(function(_req, res) {
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(PAGES.customer);
+});
 
 // ── Express error handler — must have 4 params so Express treats it as error middleware ──
 // eslint-disable-next-line no-unused-vars
