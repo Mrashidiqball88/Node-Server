@@ -25,6 +25,7 @@ const http     = require('http');
 const { Server } = require('socket.io');
 const path     = require('path');
 const webpush  = require('web-push');
+const crypto   = require('crypto');
 
 // ── 2. APP & SERVER INITIALIZATION ───────────────────────────────────────
 const app    = express();
@@ -131,9 +132,10 @@ const userSchema = new mongoose.Schema({
   otpCode:   { type: String,  default: null },
   otpExpiry: { type: Date,    default: null },
   // Admin management
-  accountStatus:   { type: String, enum: ['active','pending','suspended','blocked'], default: 'active' },
+  accountStatus:   { type: String, enum: ['active','pending','suspended','blocked','pending_deletion'], default: 'active' },
   suspendReason:   { type: String, default: '' },
   suspendedAt:     { type: Date,   default: null },
+  activeSessionToken: { type: String, default: null },   // single-device login enforcement
   // Driver verification documents (URL strings)
   profilePhoto:    { type: String, default: '' },
   cnicFront:       { type: String, default: '' },
@@ -263,13 +265,23 @@ const PushSub  = mongoose.model('PushSub',  pushSubSchema);
 // Auth Middleware
 // ─────────────────────────────────────────────────────────────────────────────
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authorization token required' });
   }
   try {
     req.user = jwt.verify(auth.slice(7), JWT_SECRET);
+    // Single-device session enforcement — drivers only
+    if (req.user.role === 'driver' && dbConnected) {
+      const clientSession = req.headers['x-session-token'];
+      if (clientSession) {
+        const driver = await User.findById(req.user.id).select('activeSessionToken').lean();
+        if (driver && driver.activeSessionToken && driver.activeSessionToken !== clientSession) {
+          return res.status(401).json({ error: 'LOGGED_IN_ELSEWHERE' });
+        }
+      }
+    }
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -338,12 +350,17 @@ app.post('/api/auth/register', async (req, res) => {
     });
     await Wallet.create({ user: user._id, balance: 0, transactions: [] });
 
+    // Single-device session token
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    await User.updateOne({ _id: user._id }, { activeSessionToken: sessionToken });
+
     const token = jwt.sign(
       { id: user._id, email: user.email || '', role: user.role, name: user.name },
       JWT_SECRET, { expiresIn: '7d' }
     );
     res.status(201).json({
       token,
+      sessionToken,
       user: { id: user._id, name: user.name, email: user.email || '', phone: user.phone,
               role: user.role, accountStatus: user.accountStatus,
               vehicleType: user.vehicleType,
@@ -369,18 +386,40 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'No account found with this phone number or email' });
     if (!(await bcrypt.compare(password, user.password)))
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+    // Generate a new single-device session token and overwrite any previous one
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    await User.updateOne({ _id: user._id }, { activeSessionToken: sessionToken });
+
     const token = jwt.sign(
       { id: user._id, email: user.email || '', role: user.role, name: user.name },
       JWT_SECRET, { expiresIn: '7d' }
     );
     res.json({
       token,
+      sessionToken,
       user: { id: user._id, name: user.name, email: user.email || '', phone: user.phone,
               role: user.role, accountStatus: user.accountStatus,
               profilePhoto: user.profilePhoto || '',
               vehicleType: user.vehicleType,
               vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate, rating: user.rating }
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Account Deletion Request ──────────────────────────────────────────────
+app.post('/api/account/delete-request', authMiddleware, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Password confirmation is required' });
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Account not found' });
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ error: 'Incorrect password' });
+    // Mark for deletion and invalidate session — admin reviews before permanent removal
+    await User.updateOne({ _id: user._id }, { accountStatus: 'pending_deletion', activeSessionToken: null });
+    res.json({ message: 'Account deletion requested. Our team will review and permanently remove your data within 24–48 hours.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -495,27 +534,40 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
 
     // Also push a Web Push notification to subscribed active drivers (handles closed tabs)
     if (global._vapidPublicKey && dbConnected) {
-      const area    = ride.pickupLocation?.address || 'Nearby';
-      const fareStr = `Rs ${(ride.fare || 0).toLocaleString()}`;
-      const distStr = ride.distance ? ` · ${ride.distance.toFixed(1)} km` : '';
+      const area         = ride.pickupLocation?.address || 'Nearby';
+      const fareStr      = `Rs ${(ride.fare || 0).toLocaleString()}`;
+      const distStr      = ride.distance ? ` · ${ride.distance.toFixed(1)} km` : '';
+      const customerName = req.user?.name || 'Customer';
       const pushData = {
-        title: '🚗 New Ride Request!',
-        body:  `📍 ${area}\n💰 ${fareStr}${distStr}`,
-        url:   '/driver'
+        title:   '🚗 New Ride Request!',
+        body:    `👤 ${customerName}\n📍 ${area}\n💰 ${fareStr}${distStr}`,
+        url:     '/driver',
+        rideId:  String(ride._id),
+        actions: [
+          { action: 'accept', title: '✅ Accept Ride' },
+          { action: 'reject', title: '❌ Reject Ride' },
+          { action: 'open',   title: '📱 Go to App'  }
+        ]
       };
       // Fire-and-forget — don't block the HTTP response.
-      // Only send to subscriptions belonging to active drivers (not customers,
-      // not pending/suspended/blocked drivers).
+      // Only active drivers with non-negative wallet balance receive the push.
       User.find({ role: 'driver', accountStatus: 'active' }).select('_id').lean()
-        .then(activeDrivers => {
+        .then(async activeDrivers => {
           const activeIds = activeDrivers.map(d => String(d._id));
-          return PushSub.find({ user: { $in: activeIds } });
+          // Filter out drivers with insufficient balance
+          const eligibleWallets = await Wallet.find(
+            { user: { $in: activeIds }, balance: { $gte: 0 } }
+          ).select('user').lean();
+          const eligibleSet = new Set(eligibleWallets.map(w => String(w.user)));
+          const eligibleIds = activeIds.filter(id => eligibleSet.has(id));
+          return PushSub.find({ user: { $in: eligibleIds } });
         })
         .then(subs => {
           subs.forEach(sub => {
             webpush.sendNotification(
               { endpoint: sub.endpoint, keys: sub.keys },
-              JSON.stringify(pushData)
+              JSON.stringify(pushData),
+              { urgency: 'high', TTL: 60 }
             ).catch(err => {
               // 410 Gone = subscription expired — clean it up
               if (err.statusCode === 410) PushSub.deleteOne({ _id: sub._id }).catch(() => {});
@@ -1686,7 +1738,7 @@ io.on('connection', (socket) => {
         socket.emit('account:suspended', { reason: 'Your account is pending Admin approval. You will be notified once approved.' });
         return;
       }
-      if (driver?.accountStatus === 'suspended' || driver?.accountStatus === 'blocked') {
+      if (driver?.accountStatus === 'suspended' || driver?.accountStatus === 'blocked' || driver?.accountStatus === 'pending_deletion') {
         socket.emit('account:suspended', { reason: 'Your account has been suspended. Please contact Admin.' });
         return;
       }
@@ -1833,6 +1885,33 @@ async function runDailyDeduction() {
       count++;
     }
     console.log(`✓ Daily deduction complete: ${count} drivers charged`);
+
+    // Notify drivers who now have zero or negative balance
+    if (global._vapidPublicKey && count > 0) {
+      try {
+        const driverIds    = drivers.map(d => d._id);
+        const lowWallets   = await Wallet.find({ user: { $in: driverIds }, balance: { $lte: 0 } }).select('user').lean();
+        const lowIds       = lowWallets.map(w => String(w.user));
+        if (lowIds.length) {
+          const lowBalPush = {
+            title: '⚠️ Insufficient Wallet Balance',
+            body:  'Your wallet balance is zero or negative. Please top up to continue receiving ride requests.\n\nDeposit via JazzCash / EasyPaisa to the account shown in the app.',
+            url:   '/driver'
+          };
+          const subs = await PushSub.find({ user: { $in: lowIds } });
+          subs.forEach(sub => {
+            webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: sub.keys },
+              JSON.stringify(lowBalPush),
+              { urgency: 'high', TTL: 3600 }
+            ).catch(err => {
+              if (err.statusCode === 410) PushSub.deleteOne({ _id: sub._id }).catch(() => {});
+            });
+          });
+          console.log(`⚠ Low-balance notification sent to ${lowIds.length} driver(s)`);
+        }
+      } catch (notifyErr) { console.warn('Low-balance notify error:', notifyErr.message); }
+    }
   } catch (err) { console.error('Daily deduction error:', err.message); }
 }
 

@@ -41,31 +41,48 @@ self.addEventListener('push', event => {
   try { data = event.data ? event.data.json() : {}; } catch (_) {}
   const title   = data.title || '🚗 New Ride Request!';
   const options = {
-    body:              data.body  || 'A new ride request is waiting for you.',
-    icon:              '/icon-192.png',
-    badge:             '/icon-192.png',
-    tag:               'ride-request',
+    body:               data.body  || 'A new ride request is waiting for you.',
+    icon:               '/icon-192.png',
+    badge:              '/icon-192.png',
+    tag:                'ride-request',
     requireInteraction: true,
-    vibrate:           [400, 150, 400, 150, 400],
-    data:              { url: data.url || '/driver' }
+    vibrate:            [400, 150, 400, 150, 400],
+    data:               { url: data.url || '/driver', rideId: data.rideId || null },
+    actions: [
+      { action: 'accept', title: '✅ Accept Ride' },
+      { action: 'reject', title: '❌ Reject Ride' },
+      { action: 'open',   title: '📱 Go to App'  }
+    ]
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// ── Notification click: focus or open the Driver App ─────────────────────────
+// ── Notification click: handle action buttons and focus/open Driver App ──────
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/driver';
+  const notifData = event.notification.data || {};
+  const targetUrl = notifData.url || '/driver';
+  const rideId    = notifData.rideId;
+  const action    = event.action;
+
+  // "Reject" just dismisses — ride times out server-side automatically
+  if (action === 'reject') return;
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      // Focus an existing driver-app tab if one is open
-      for (const client of list) {
-        if (client.url.includes('/driver') && 'focus' in client) {
-          return client.focus();
+      const driverTab = list.find(c => c.url.includes('/driver'));
+      if (driverTab) {
+        // Post a message so the app can auto-accept without user tapping again
+        if (action === 'accept' && rideId) {
+          driverTab.postMessage({ type: 'ACCEPT_RIDE', rideId });
         }
+        return driverTab.focus();
       }
-      // Otherwise open a new tab
-      if (clients.openWindow) return clients.openWindow(targetUrl);
+      // No existing tab — open one; include rideId hash for auto-accept on load
+      const openUrl = (action === 'accept' && rideId)
+        ? `${targetUrl}#accept:${rideId}`
+        : targetUrl;
+      if (clients.openWindow) return clients.openWindow(openUrl);
     })
   );
 });

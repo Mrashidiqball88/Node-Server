@@ -371,6 +371,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
           <div class="dots-item" onclick="openEmergencyContactsModal()">🆘 Emergency Contacts</div>
           <div class="dots-item" onclick="openSupportModal()">🎫 Contact Support</div>
           <div class="dots-item" onclick="openMyTickets()">📋 My Tickets <span id="cust-ticket-badge" class="cust-ticket-badge" style="display:none">0</span></div>
+          <div class="dots-item danger" onclick="openDeleteAccountModal()">🗑 Delete Account</div>
           <div class="dots-item danger" onclick="doLogout()">🚪 Logout</div>
         </div>
       </div>
@@ -1793,6 +1794,48 @@ if ('serviceWorker' in navigator) {
       .then(reg => console.log('[SW] Customer registered, scope:', reg.scope))
       .catch(err => console.warn('[SW] Registration failed:', err));
   });
+}
+</script>
+
+<!-- ── Delete Account Modal ──────────────────────────────────────────────── -->
+<div id="delete-account-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:#0d1117;border:1px solid #3a1a1a;border-radius:16px;padding:1.5rem;max-width:340px;width:90%;margin:auto">
+    <h3 style="color:#ff4444;margin:0 0 .5rem">⚠️ Delete Account Permanently</h3>
+    <p style="color:#aaa;font-size:.82rem;line-height:1.5;margin-bottom:1rem">This cannot be undone. Enter your password to confirm. An admin will review and remove all your data within 24–48 hours.</p>
+    <input type="password" id="del-acc-pass" placeholder="Enter your password" style="width:100%;padding:.75rem;border-radius:8px;border:1px solid #444;background:#161b22;color:#fff;margin-bottom:.5rem;box-sizing:border-box;font-size:.9rem">
+    <p id="del-acc-err" style="color:#ff4444;font-size:.8rem;min-height:1.1em;margin-bottom:.75rem"></p>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="closeDeleteAccountModal()" style="flex:1;padding:.75rem;border-radius:8px;border:1px solid #333;background:#0d1117;color:#aaa;cursor:pointer;font-size:.875rem">Cancel</button>
+      <button id="del-acc-btn" onclick="doDeleteAccount()" style="flex:1;padding:.75rem;border-radius:8px;border:none;background:#cc2222;color:#fff;font-weight:600;cursor:pointer;font-size:.875rem">Delete My Account</button>
+    </div>
+  </div>
+</div>
+<script>
+function openDeleteAccountModal() {
+  document.getElementById('del-acc-pass').value = '';
+  document.getElementById('del-acc-err').textContent = '';
+  const btn = document.getElementById('del-acc-btn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Delete My Account'; }
+  document.getElementById('delete-account-modal').style.display = 'flex';
+}
+function closeDeleteAccountModal() {
+  document.getElementById('delete-account-modal').style.display = 'none';
+}
+async function doDeleteAccount() {
+  const pass  = document.getElementById('del-acc-pass').value;
+  const errEl = document.getElementById('del-acc-err');
+  const btn   = document.getElementById('del-acc-btn');
+  if (!pass) { errEl.textContent = 'Password is required'; return; }
+  btn.disabled = true; btn.textContent = 'Processing…';
+  try {
+    const res = await apiCall('/api/account/delete-request', 'POST', { password: pass });
+    closeDeleteAccountModal();
+    alert('✅ ' + res.message);
+    doLogout();
+  } catch (e) {
+    errEl.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Delete My Account';
+  }
 }
 </script>
 </body>
