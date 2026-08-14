@@ -1,55 +1,20 @@
-run = "cd ride-hailing && node server.js"
-modules = ["nodejs-24", "python-base-3.13"]
+modules = ["nodejs-24"]
 
-[[ports]]
-localPort = 3000
-externalPort = 80
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
 
-[[ports]]
-localPort = 5599
-externalPort = 3002
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 8081
-externalPort = 3001
-
-[[ports]]
-localPort = 8082
-externalPort = 3000
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
 
 [workflows]
 runButton = "Project"
 
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Ride-Hailing App"
-
-[[workflows.workflow]]
-name = "Ride-Hailing App"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd ride-hailing && node server.js"
-waitForPort = 3000
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[deployment]
-deploymentTarget = "autoscale"
-run = ["bash", "-c", "cd ride-hailing && exec node server.js"]
-build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev"]
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 120000
+timeoutMs = 20000
