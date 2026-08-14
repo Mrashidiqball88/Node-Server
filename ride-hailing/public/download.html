@@ -93,6 +93,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark);color:#f
 /* ── Footer ── */
 .footer{text-align:center;padding:1.5rem 1rem 0;color:#333;font-size:.75rem}
 .footer a{color:#555;text-decoration:none}
+
+/* ── QR Code section (desktop only) ── */
+#qr-section{display:none;max-width:860px;margin:1.5rem auto 0;padding:0 1rem}
+@media(min-width:640px){#qr-section{display:block}}
+.qr-section-title{text-align:center;font-size:.75rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.1em;margin-bottom:1rem}
+.qr-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.qr-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.5rem;display:flex;flex-direction:column;align-items:center;gap:.85rem}
+.qr-card-label{font-size:.8rem;font-weight:700;color:#888;display:flex;align-items:center;gap:.4rem}
+.qr-canvas-wrap{background:#fff;border-radius:12px;padding:12px;line-height:0}
+.qr-url{font-size:.68rem;color:#555;word-break:break-all;text-align:center;max-width:180px}
+.btn-dl{margin:1.25rem auto 0;display:flex;align-items:center;justify-content:center;gap:.55rem;background:#1a1000;border:1px solid var(--gold);color:var(--gold);border-radius:12px;padding:.75rem 1.75rem;font-size:.88rem;font-weight:700;cursor:pointer;transition:background .2s}
+.btn-dl:hover{background:#2a1f00}
 </style>
 </head>
 <body>
@@ -252,10 +264,29 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark);color:#f
 
 </div><!-- /grid -->
 
+<!-- QR Code section — desktop only -->
+<div id="qr-section">
+  <div class="qr-section-title">🖨 Admin Onboarding Cards — Print or Share</div>
+  <div class="qr-cards">
+    <div class="qr-card">
+      <div class="qr-card-label"><span>🚖</span> Customer App</div>
+      <div class="qr-canvas-wrap" id="qr-customer"></div>
+      <div class="qr-url" id="qr-customer-url"></div>
+    </div>
+    <div class="qr-card">
+      <div class="qr-card-label"><span>🚗</span> Driver App</div>
+      <div class="qr-canvas-wrap" id="qr-driver"></div>
+      <div class="qr-url" id="qr-driver-url"></div>
+    </div>
+  </div>
+  <button class="btn-dl" onclick="downloadQrCard()">⬇ Download QR Card (PNG)</button>
+</div>
+
 <div class="footer">
   <p>MyRide &copy; 2026 &nbsp;·&nbsp; <a href="/customer">Open Customer App</a> &nbsp;·&nbsp; <a href="/driver">Open Driver App</a></p>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 // ── Device detection ──────────────────────────────────────────────────────────
 const ua      = navigator.userAgent;
@@ -368,7 +399,113 @@ function init() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// ── QR Code generation ────────────────────────────────────────────────────────
+function buildQrCodes() {
+  const custUrl = `${appOrigin}/customer`;
+  const drvUrl  = `${appOrigin}/driver`;
+
+  // Show URL labels
+  document.getElementById('qr-customer-url').textContent = custUrl;
+  document.getElementById('qr-driver-url').textContent   = drvUrl;
+
+  [
+    { id: 'qr-customer', url: custUrl },
+    { id: 'qr-driver',   url: drvUrl  },
+  ].forEach(({ id, url }) => {
+    new QRCode(document.getElementById(id), {
+      text:          url,
+      width:         180,
+      height:        180,
+      colorDark:     '#000000',
+      colorLight:    '#ffffff',
+      correctLevel:  QRCode.CorrectLevel.H,
+    });
+  });
+}
+
+// ── Download QR Card as PNG ───────────────────────────────────────────────────
+function downloadQrCard() {
+  // Grab the two generated canvases (qrcode.js appends a <canvas> inside the wrapper)
+  const custCanvas = document.querySelector('#qr-customer canvas');
+  const drvCanvas  = document.querySelector('#qr-driver canvas');
+  if (!custCanvas || !drvCanvas) { alert('QR codes not ready yet.'); return; }
+
+  const qrSize   = custCanvas.width;   // 180px (device pixels)
+  const pad      = 32;
+  const labelH   = 28;
+  const urlH     = 18;
+  const logoH    = 48;
+  const gapX     = 48;
+  const cardW    = (pad * 2) + qrSize * 2 + gapX;
+  const cardH    = logoH + 24 + labelH + qrSize + urlH + pad * 2;
+
+  const out = document.createElement('canvas');
+  out.width  = cardW;
+  out.height = cardH;
+  const ctx  = out.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, cardW, cardH);
+
+  // Rounded card border
+  ctx.strokeStyle = '#f5c518';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.roundRect(4, 4, cardW - 8, cardH - 8, 16);
+  ctx.stroke();
+
+  // Logo
+  ctx.fillStyle    = '#ffffff';
+  ctx.font         = `bold ${logoH * 0.65}px "Segoe UI", system-ui, sans-serif`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('My', cardW / 2 - ctx.measureText('Ride').width / 2 - 1, pad);
+  ctx.fillStyle = '#f5c518';
+  ctx.fillText('Ride', cardW / 2 + ctx.measureText('My').width / 2 - 1, pad);
+
+  // Draw each QR block
+  const blocks = [
+    { label: '🚖  Customer App', canvas: custCanvas, x: pad },
+    { label: '🚗  Driver App',   canvas: drvCanvas,  x: pad + qrSize + gapX },
+  ];
+
+  const topY = pad + logoH + 16;
+
+  blocks.forEach(({ label, canvas, x }) => {
+    // Label
+    ctx.fillStyle    = '#aaaaaa';
+    ctx.font         = `600 13px "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, x + qrSize / 2, topY);
+
+    // White QR background + QR image
+    const qrY = topY + labelH;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(x, qrY, qrSize, qrSize, 8);
+    ctx.fill();
+    ctx.drawImage(canvas, x, qrY, qrSize, qrSize);
+
+    // URL under QR
+    const urlText = (appOrigin + (label.includes('Customer') ? '/customer' : '/driver'))
+      .replace(/^https?:\/\//, '');
+    ctx.fillStyle    = '#666666';
+    ctx.font         = `11px "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(urlText, x + qrSize / 2, qrY + qrSize + 6);
+  });
+
+  // Trigger download
+  const link    = document.createElement('a');
+  link.download = 'myride-qr-card.png';
+  link.href     = out.toDataURL('image/png');
+  link.click();
+}
+
+document.addEventListener('DOMContentLoaded', () => { init(); buildQrCodes(); });
 </script>
 </body>
 </html>
