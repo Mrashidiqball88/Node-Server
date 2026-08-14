@@ -42,7 +42,7 @@ waitForPort = 3000
 outputType = "console"
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "autoscale"
 run = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev && cd ../artifacts/api-server && node ./build.mjs"]
 
