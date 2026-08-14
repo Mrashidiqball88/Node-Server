@@ -25,20 +25,53 @@ if (process.env.NODE_ENV !== "development") {
 
   logger.info({ serverPath }, "Production mode — delegating to ride-hailing server");
 
-  const proc = spawn("node", [serverPath], {
-    env: { ...process.env },
-    stdio: "inherit",
-  });
+  // Auto-restart with exponential backoff so a transient crash never takes
+  // down the VM permanently. Back off up to 30 s to avoid a crash loop.
+  let restartDelayMs = 1_000;
+  const MAX_RESTART_DELAY_MS = 30_000;
 
-  proc.on("error", (err) => {
-    logger.error({ err }, "Failed to start ride-hailing server");
-    process.exit(1);
-  });
+  function launchRideHailing(): void {
+    logger.info({ serverPath, restartDelayMs }, "Spawning ride-hailing server");
 
-  proc.on("exit", (code, signal) => {
-    logger.info({ code, signal }, "Ride-hailing server exited");
-    process.exit(code ?? 1);
-  });
+    const proc = spawn("node", [serverPath], {
+      env: { ...process.env },
+      stdio: "inherit",
+    });
+
+    // Reset backoff after the child has been alive for at least 30 s
+    const stableTimer = setTimeout(() => { restartDelayMs = 1_000; }, 30_000);
+
+    proc.on("error", (err) => {
+      clearTimeout(stableTimer);
+      logger.error({ err }, "Failed to start ride-hailing server — will retry");
+      scheduleRestart();
+    });
+
+    proc.on("exit", (code, signal) => {
+      clearTimeout(stableTimer);
+      // Graceful shutdown: propagate and exit cleanly
+      if (signal === "SIGTERM" || signal === "SIGINT") {
+        logger.info({ code, signal }, "Ride-hailing server stopped gracefully");
+        process.exit(0);
+      }
+      logger.warn({ code, signal }, "Ride-hailing server crashed — restarting");
+      scheduleRestart();
+    });
+  }
+
+  function scheduleRestart(): void {
+    logger.info({ retryInMs: restartDelayMs }, "Scheduling ride-hailing restart");
+    setTimeout(() => {
+      restartDelayMs = Math.min(restartDelayMs * 2, MAX_RESTART_DELAY_MS);
+      launchRideHailing();
+    }, restartDelayMs);
+  }
+
+  // Forward SIGTERM/SIGINT to the child so it can shut down cleanly
+  process.on("SIGTERM", () => process.kill(process.pid, "SIGTERM"));
+  process.on("SIGINT",  () => process.kill(process.pid, "SIGINT"));
+
+  launchRideHailing();
 } else {
   // ── Development: run the compiled TypeScript api-server normally ──────────
 

@@ -1,5 +1,5 @@
 run = "cd ride-hailing && node server.js"
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "python-base-3.13"]
 
 [[ports]]
 localPort = 3000
@@ -42,9 +42,9 @@ waitForPort = 3000
 outputType = "console"
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "vm"
 run = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
-build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev"]
+build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev && cd ../artifacts/api-server && npm install && node ./build.mjs"]
 
 [postMerge]
 path = "scripts/post-merge.sh"

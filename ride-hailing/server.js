@@ -5,6 +5,17 @@
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
 
+// ─── Global crash protection ──────────────────────────────────────────────────
+// Catch any unhandled error/rejection so the server never exits unexpectedly.
+// Log the problem and keep running — the request that caused it will simply
+// time-out or receive a 500, which is far better than a full process crash.
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught Exception (server kept alive):', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled Promise Rejection (server kept alive):', reason);
+});
+
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
@@ -1501,9 +1512,26 @@ async function start() {
   } else {
     const uri = normalizeMongoUri(rawUri);
     try {
-      await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
+      await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 8000,
+        // Keep the connection alive across idle periods
+        heartbeatFrequencyMS: 10000,
+      });
       dbConnected = true;
       console.log('✓ MongoDB Atlas connected');
+
+      // ── Reconnection handlers — keep dbConnected flag accurate ──────────────
+      mongoose.connection.on('disconnected', () => {
+        dbConnected = false;
+        console.warn('⚠  MongoDB disconnected — Mongoose will auto-reconnect');
+      });
+      mongoose.connection.on('reconnected', () => {
+        dbConnected = true;
+        console.log('✓ MongoDB reconnected');
+      });
+      mongoose.connection.on('error', (mongoErr) => {
+        console.error('MongoDB connection error:', mongoErr.message);
+      });
 
       // ── Migrate email index to sparse (one-time, safe to re-run) ──────────
       // Old deployments have a non-sparse unique index that blocks null emails.
