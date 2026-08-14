@@ -1,9 +1,10 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "python-base-3.13"]
 
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
 run = "node ride-hailing/server.js"
+build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]

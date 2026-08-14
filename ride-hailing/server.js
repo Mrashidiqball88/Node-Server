@@ -32,9 +32,8 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
 // ── 3. HEALTHCHECK ROUTES — registered first, zero dependencies ──────────
-// Deployment probes arrive at / and /health the instant the process starts.
-// These handlers must reply 200 before any DB connection or heavy middleware.
-app.get('/',       (_req, res) => res.status(200).send('OK'));
+// Deployment probes hit /health and /api immediately on startup.
+// These must return 200 with zero dependencies — no DB, no middleware.
 app.get('/health', (_req, res) => res.status(200).send('OK'));
 app.get('/api',    (_req, res) => res.status(200).json({ status: 'ok' }));
 
@@ -1759,6 +1758,7 @@ async function initVapidKeys() {
 
 async function connectDatabase() {
   const rawUri = process.env.MONGO_URI;
+  console.log('MONGO_URI attached:', !!rawUri);
   if (!rawUri) {
     console.warn('⚠  MONGO_URI not set — running in testing mode (data not persisted)');
     return;
