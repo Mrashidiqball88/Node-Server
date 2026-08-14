@@ -33,7 +33,10 @@ const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+// path.resolve is used throughout (not path.join) so paths are always absolute
+// even when __dirname resolves to '.' in child-process spawn contexts.
+const PUBLIC_DIR = path.resolve(__dirname, 'public');
+app.use(express.static(PUBLIC_DIR));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ride-hailing-secret-fallback';
 let dbConnected  = false;
@@ -1511,19 +1514,36 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
 // Health Check
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Health endpoints — deployment probe checks both /api and /api/health
+app.get('/api',        (_req, res) => res.json({ status: 'ok' }));
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', db: dbConnected ? 'connected' : 'testing-mode', ts: new Date().toISOString() });
 });
 
 // Page routes — '/' opens the customer app directly
-app.get('/customer', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
-app.get('/driver',   (_req, res) => res.sendFile(path.join(__dirname, 'public', 'driver.html')));
-app.get('/admin',    (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/download', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'download.html')));
-app.get('/',         (_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
+const sendPage = (file) => (_req, res, next) => {
+  res.sendFile(path.resolve(PUBLIC_DIR, file), (err) => { if (err) next(err); });
+};
+app.get('/customer', sendPage('customer.html'));
+app.get('/driver',   sendPage('driver.html'));
+app.get('/admin',    sendPage('admin.html'));
+app.get('/download', sendPage('download.html'));
+app.get('/',         sendPage('customer.html'));
 
-// Catch-all: serve customer app for any unmatched GET (prevents Cloud Run 404 on deep links)
-app.use((_req, res) => res.sendFile(path.join(__dirname, 'public', 'customer.html')));
+// Catch-all: serve customer app for any unmatched GET (prevents 404 on deep links)
+app.use((_req, res, next) => {
+  res.sendFile(path.resolve(PUBLIC_DIR, 'customer.html'), (err) => { if (err) next(err); });
+});
+
+// ── Express error handler — must have 4 params so Express treats it as error middleware ──
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.code === 'ENOENT' ? 'Page not found' : (err.message || 'Internal server error');
+  console.error(`[Express error] ${status} — ${err.message}`);
+  if (res.headersSent) return;
+  res.status(status).json({ error: message });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Socket.io — Real-time Layer

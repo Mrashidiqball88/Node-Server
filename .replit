@@ -44,7 +44,7 @@ outputType = "console"
 [deployment]
 deploymentTarget = "vm"
 run = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
-build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev && cd ../artifacts/api-server && npm install && node ./build.mjs"]
+build = ["bash", "-c", "cd ride-hailing && npm install --omit=dev && cd ../artifacts/api-server && node ./build.mjs"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
