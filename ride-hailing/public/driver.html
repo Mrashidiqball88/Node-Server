@@ -868,9 +868,13 @@ function bootApp() {
   connectSocket();
   loadStats();
   checkUnreadDriverTickets();
-  // Request browser notification permission so alerts fire even when tab is in background
+  // Request notification permission then register Web Push subscription
   if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
+    Notification.requestPermission().then(perm => {
+      if (perm === 'granted') registerPushSubscription();
+    });
+  } else if ('Notification' in window && Notification.permission === 'granted') {
+    registerPushSubscription();
   }
   // Double rAF ensures the browser has fully painted the flex layout before
   // Leaflet measures #map — fixes the 0×0 container race condition.
@@ -889,6 +893,62 @@ function bootApp() {
     if (pendingCard) pendingCard.style.display = 'none';
     if (onlineBar)   onlineBar.style.display   = '';
   }
+}
+
+// ── Web Push Subscription Registration ────────────────────────────────────
+async function registerPushSubscription() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const reg = await navigator.serviceWorker.ready;
+    if (!reg.pushManager) return;
+
+    // Fetch the server's VAPID public key
+    const resp = await fetch('/api/push/vapid-key');
+    if (!resp.ok) return;   // Push not configured on server yet
+    const { publicKey } = await resp.json();
+    if (!publicKey) return;
+
+    // Convert Base64 URL-safe key to Uint8Array
+    const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+    // Check for an existing subscription — re-use if the key matches
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      // If server key changed, unsubscribe and re-subscribe
+      const existingKey = sub.options?.applicationServerKey;
+      if (existingKey) {
+        const existingB64 = btoa(String.fromCharCode(...new Uint8Array(existingKey)));
+        const newB64      = publicKey.replace(/-/g, '+').replace(/_/g, '/');
+        if (existingB64 !== newB64) { await sub.unsubscribe(); sub = null; }
+      }
+    }
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey
+      });
+    }
+
+    // Send the subscription to the server
+    const subJson = sub.toJSON();
+    await fetch('/api/push/subscribe', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys })
+    });
+  } catch (err) {
+    console.warn('Push subscription failed:', err.message || err);
+  }
+}
+
+/** Convert a Base64URL string to a Uint8Array (required by PushManager.subscribe) */
+function urlBase64ToUint8Array(base64String) {
+  const padding  = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64   = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw      = atob(base64);
+  const output   = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
+  return output;
 }
 
 // ── Map ────────────────────────────────────────────────────────────────────

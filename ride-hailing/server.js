@@ -24,6 +24,7 @@ const cors     = require('cors');
 const http     = require('http');
 const { Server } = require('socket.io');
 const path     = require('path');
+const webpush  = require('web-push');
 
 const app    = express();
 const server = http.createServer(app);
@@ -196,6 +197,15 @@ const settingsSchema = new mongoose.Schema({
   value: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { timestamps: true });
 
+// Web-Push subscriptions per driver
+const pushSubSchema = new mongoose.Schema({
+  user:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  endpoint:     { type: String, required: true },
+  keys:         { p256dh: String, auth: String },
+  updatedAt:    { type: Date, default: Date.now }
+});
+pushSubSchema.index({ user: 1, endpoint: 1 }, { unique: true });
+
 const User     = mongoose.model('User',     userSchema);
 const Ride     = mongoose.model('Ride',     rideSchema);
 const Wallet   = mongoose.model('Wallet',   walletSchema);
@@ -203,6 +213,7 @@ const SOS      = mongoose.model('SOS',      sosSchema);
 const Payment  = mongoose.model('Payment',  paymentSchema);
 const Ticket   = mongoose.model('Ticket',   ticketSchema);
 const Settings = mongoose.model('Settings', settingsSchema);
+const PushSub  = mongoose.model('PushSub',  pushSubSchema);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth Middleware
@@ -423,8 +434,8 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
       mobileAccount: mobileAccount || ''
     });
 
-    // Broadcast to all online drivers
-    io.to('drivers-online').emit('ride:new', {
+    // Broadcast to all online drivers via Socket.io
+    const ridePayload = {
       id:               ride._id,
       pickupLocation:   ride.pickupLocation,
       dropoffLocation:  ride.dropoffLocation,
@@ -435,7 +446,40 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
       paymentMethod:    ride.paymentMethod,
       notes:            ride.notes,
       createdAt:        ride.createdAt
-    });
+    };
+    io.to('drivers-online').emit('ride:new', ridePayload);
+
+    // Also push a Web Push notification to subscribed active drivers (handles closed tabs)
+    if (global._vapidPublicKey && dbConnected) {
+      const area    = ride.pickupLocation?.address || 'Nearby';
+      const fareStr = `Rs ${(ride.fare || 0).toLocaleString()}`;
+      const distStr = ride.distance ? ` · ${ride.distance.toFixed(1)} km` : '';
+      const pushData = {
+        title: '🚗 New Ride Request!',
+        body:  `📍 ${area}\n💰 ${fareStr}${distStr}`,
+        url:   '/driver'
+      };
+      // Fire-and-forget — don't block the HTTP response.
+      // Only send to subscriptions belonging to active drivers (not customers,
+      // not pending/suspended/blocked drivers).
+      User.find({ role: 'driver', accountStatus: 'active' }).select('_id').lean()
+        .then(activeDrivers => {
+          const activeIds = activeDrivers.map(d => String(d._id));
+          return PushSub.find({ user: { $in: activeIds } });
+        })
+        .then(subs => {
+          subs.forEach(sub => {
+            webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: sub.keys },
+              JSON.stringify(pushData)
+            ).catch(err => {
+              // 410 Gone = subscription expired — clean it up
+              if (err.statusCode === 410) PushSub.deleteOne({ _id: sub._id }).catch(() => {});
+            });
+          });
+        })
+        .catch(() => {});
+    }
 
     res.status(201).json(ride);
   } catch (err) {
@@ -1395,6 +1439,75 @@ app.get('/api/admin/daily-income', adminJwt, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Web Push Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/push/vapid-key — return the public VAPID key to the client
+app.get('/api/push/vapid-key', (_req, res) => {
+  if (!global._vapidPublicKey) return res.status(503).json({ error: 'Push not configured' });
+  res.json({ publicKey: global._vapidPublicKey });
+});
+
+// POST /api/push/subscribe — save (or update) a driver's push subscription
+// Only active/approved drivers may register; customers are rejected.
+app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
+  try {
+    // Drivers only
+    if (req.user.role !== 'driver') {
+      return res.status(403).json({ error: 'Only drivers can register push subscriptions' });
+    }
+
+    // Confirm driver is active in DB (not pending/suspended/blocked)
+    const driver = await User.findById(req.user.id).select('role accountStatus');
+    if (!driver || driver.role !== 'driver') {
+      return res.status(403).json({ error: 'Driver account not found' });
+    }
+    if (driver.accountStatus !== 'active') {
+      return res.status(403).json({ error: 'Only active driver accounts can register push subscriptions' });
+    }
+
+    const { endpoint, keys } = req.body;
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return res.status(400).json({ error: 'endpoint and keys (p256dh, auth) are required' });
+    }
+
+    // Validate endpoint is from a known browser push-service origin.
+    // This prevents SSRF: the server would otherwise make outbound requests
+    // to any attacker-supplied HTTPS URL via webpush.sendNotification().
+    const ALLOWED_PUSH_ORIGINS = [
+      'https://fcm.googleapis.com',              // Chrome, Edge, Opera, Samsung
+      'https://updates.push.services.mozilla.com', // Firefox
+      'https://push.services.mozilla.com',        // Firefox (newer)
+      'https://web.push.apple.com',               // Safari 16+
+      'https://api.push.apple.com',               // Safari (alternate)
+    ];
+    let parsedEndpoint;
+    try { parsedEndpoint = new URL(endpoint); } catch {
+      return res.status(400).json({ error: 'endpoint must be a valid URL' });
+    }
+    if (parsedEndpoint.protocol !== 'https:') {
+      return res.status(400).json({ error: 'endpoint must use HTTPS' });
+    }
+    const endpointOrigin = parsedEndpoint.origin;
+    const isAllowed = ALLOWED_PUSH_ORIGINS.some(
+      allowed => endpointOrigin === allowed || endpointOrigin.endsWith('.' + new URL(allowed).hostname)
+    );
+    if (!isAllowed) {
+      return res.status(400).json({ error: 'endpoint is not from a supported browser push service' });
+    }
+
+    await PushSub.findOneAndUpdate(
+      { user: req.user.id, endpoint },
+      { user: req.user.id, endpoint, keys, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Health Check
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1505,6 +1618,45 @@ io.on('connection', (socket) => {
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
+async function initVapidKeys() {
+  // Prefer explicit env-var keys (set once, rotate rarely)
+  const envPublic  = process.env.VAPID_PUBLIC_KEY;
+  const envPrivate = process.env.VAPID_PRIVATE_KEY;
+  const contactEmail = process.env.VAPID_EMAIL || 'mailto:admin@myride.app';
+
+  if (envPublic && envPrivate) {
+    webpush.setVapidDetails(contactEmail, envPublic, envPrivate);
+    global._vapidPublicKey = envPublic;
+    console.log('✓ VAPID keys loaded from environment');
+    return;
+  }
+
+  // Fall back to keys stored in MongoDB Settings (persist across restarts)
+  if (dbConnected) {
+    try {
+      let doc = await Settings.findOne({ key: 'vapid_keys' });
+      if (!doc) {
+        const keys = webpush.generateVAPIDKeys();
+        doc = await Settings.create({ key: 'vapid_keys', value: keys });
+        console.log('✓ VAPID keys generated and saved to DB');
+      }
+      const { publicKey, privateKey } = doc.value;
+      webpush.setVapidDetails(contactEmail, publicKey, privateKey);
+      global._vapidPublicKey = publicKey;
+      console.log('✓ VAPID keys loaded from DB');
+      return;
+    } catch (err) {
+      console.warn('⚠  Could not load/store VAPID keys from DB:', err.message);
+    }
+  }
+
+  // Last resort: ephemeral keys (won't survive a restart — clients must re-subscribe)
+  const keys = webpush.generateVAPIDKeys();
+  webpush.setVapidDetails(contactEmail, keys.publicKey, keys.privateKey);
+  global._vapidPublicKey = keys.publicKey;
+  console.warn('⚠  Using ephemeral VAPID keys — set VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY env vars for persistence');
+}
+
 async function start() {
   const rawUri = process.env.MONGO_URI;
   if (!rawUri) {
@@ -1551,6 +1703,8 @@ async function start() {
       console.warn('⚠  MongoDB unavailable, running in testing mode:', err.message);
     }
   }
+
+  await initVapidKeys();
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚗 Ride-Hailing Server running on port ${PORT}`);

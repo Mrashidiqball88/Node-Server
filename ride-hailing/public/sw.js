@@ -35,6 +35,41 @@ self.addEventListener('activate', event => {
   );
 });
 
+// ── Push: show notification when the app is closed ──────────────────────────
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) {}
+  const title   = data.title || '🚗 New Ride Request!';
+  const options = {
+    body:              data.body  || 'A new ride request is waiting for you.',
+    icon:              '/icon-192.png',
+    badge:             '/icon-192.png',
+    tag:               'ride-request',
+    requireInteraction: true,
+    vibrate:           [400, 150, 400, 150, 400],
+    data:              { url: data.url || '/driver' }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ── Notification click: focus or open the Driver App ─────────────────────────
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/driver';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      // Focus an existing driver-app tab if one is open
+      for (const client of list) {
+        if (client.url.includes('/driver') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open a new tab
+      if (clients.openWindow) return clients.openWindow(targetUrl);
+    })
+  );
+});
+
 // ── Fetch: network-first for API & socket, cache-first for everything else ──
 self.addEventListener('fetch', event => {
   const { request } = event;
