@@ -153,6 +153,13 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .wsum-card.sub-card .wsum-val{color:#66aaff}
 .wsum-card.bonus-card .wsum-val{color:#f5c518}
 .wsum-lbl{font-size:.58rem;color:#475569;margin-top:.15rem;line-height:1.25}
+.wsum-breakdown{background:#06060e;border:1px solid #1a2a1a;border-radius:10px;padding:.6rem .75rem;margin-bottom:.7rem}
+.wsum-breakdown-row{display:flex;align-items:center;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid #0f1520}
+.wsum-breakdown-row:last-child{border-bottom:none}
+.wsum-breakdown-lbl{font-size:.8rem;color:#94a3b8}
+.wsum-breakdown-val{font-size:.88rem;font-weight:700}
+.wsum-breakdown-val.real-cash{color:#4caf50}
+.wsum-breakdown-val.bonus-credit{color:#f5c518}
 .wsum-ledger-hdr{font-size:.68rem;color:#334155;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem;padding-top:.1rem;border-top:1px solid #0f1520}
 .ledger-empty{font-size:.78rem;color:#334155;text-align:center;padding:.5rem}
 .ledger-item{display:flex;align-items:center;gap:.4rem;padding:.4rem 0;border-bottom:1px solid #0f1520;font-size:.78rem}
@@ -513,7 +520,7 @@ textarea.support-input{resize:vertical;min-height:85px}
         <div class="wsum-card balance-card">
           <div class="wsum-icon">💰</div>
           <div class="wsum-val" id="wsum-balance">—</div>
-          <div class="wsum-lbl">Wallet Balance (Rs)</div>
+          <div class="wsum-lbl">Total Balance (Rs)</div>
         </div>
         <div class="wsum-card sub-card">
           <div class="wsum-icon">📅</div>
@@ -524,6 +531,17 @@ textarea.support-input{resize:vertical;min-height:85px}
           <div class="wsum-icon">🎁</div>
           <div class="wsum-val" id="wsum-bonus">0</div>
           <div class="wsum-lbl">Bonus Credits (Rs)</div>
+        </div>
+      </div>
+      <!-- Balance breakdown: real cash vs bonus credit -->
+      <div class="wsum-breakdown">
+        <div class="wsum-breakdown-row">
+          <span class="wsum-breakdown-lbl">💵 Real Cash</span>
+          <span class="wsum-breakdown-val real-cash" id="wsum-real-cash">Rs —</span>
+        </div>
+        <div class="wsum-breakdown-row">
+          <span class="wsum-breakdown-lbl">🎁 Bonus Credit</span>
+          <span class="wsum-breakdown-val bonus-credit" id="wsum-bonus-credit">Rs —</span>
         </div>
       </div>
       <div class="wsum-ledger-hdr">Recent Transactions</div>
@@ -1627,12 +1645,17 @@ function selectPayType(el) {
 async function loadWalletSummary() {
   try {
     const data = await apiCall('/api/wallet/summary');
-    // 3-card summary
-    const bal = data.balance || 0;
-    document.getElementById('wsum-balance').textContent = bal.toLocaleString();
-    document.getElementById('wsum-balance').style.color = bal < 0 ? '#ef4444' : '#4caf50';
-    document.getElementById('wsum-sub').textContent   = (data.monthlyFee  || 0).toLocaleString();
-    document.getElementById('wsum-bonus').textContent = (data.totalBonus || 0).toLocaleString();
+    // 3-card summary — total shown as sum of real cash + bonus
+    const realCash  = data.realCashWallet ?? 0;
+    const bonusCred = data.bonusWallet    ?? 0;
+    const total     = realCash + bonusCred;
+    document.getElementById('wsum-balance').textContent = total.toLocaleString();
+    document.getElementById('wsum-balance').style.color = total < 0 ? '#ef4444' : '#4caf50';
+    document.getElementById('wsum-sub').textContent   = (data.monthlyFee || 0).toLocaleString();
+    document.getElementById('wsum-bonus').textContent = bonusCred.toLocaleString();
+    // Breakdown rows
+    document.getElementById('wsum-real-cash').textContent    = 'Rs ' + realCash.toLocaleString();
+    document.getElementById('wsum-bonus-credit').textContent = 'Rs ' + bonusCred.toLocaleString();
 
     // Transaction ledger
     const ledgerEl = document.getElementById('wsum-ledger');
