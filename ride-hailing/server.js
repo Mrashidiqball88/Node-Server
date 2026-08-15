@@ -77,6 +77,24 @@ app.use(express.static(PUBLIC_DIR));
 // stream/path behaviour in Cloud Run containers.  If a file is missing the
 // server refuses to start with a clear error rather than silently 500-ing.
 const fs = require('fs');
+
+// Persistent driver document storage — files survive restarts.
+const UPLOADS_DIR = path.resolve(__dirname, 'uploads', 'driver_docs');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use('/uploads', express.static(path.resolve(__dirname, 'uploads')));
+
+// Save a base64 data-URL to disk; return the public path.  If the value is
+// already a file path (not a data: URL) it is returned unchanged.
+function saveDocToDisk(dataUrl, fieldName) {
+  if (!dataUrl || !dataUrl.startsWith('data:')) return dataUrl || '';
+  const m = dataUrl.match(/^data:image\/(jpeg|jpg|png|webp);base64,(.+)$/s);
+  if (!m) return dataUrl;
+  const ext   = m[1] === 'jpeg' ? 'jpg' : m[1];
+  const fname = `${fieldName}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  try { fs.writeFileSync(path.join(UPLOADS_DIR, fname), Buffer.from(m[2], 'base64')); }
+  catch { return dataUrl; } // fallback — keep base64 if disk write fails
+  return `/uploads/driver_docs/${fname}`;
+}
 function loadPage(file) {
   const full = path.resolve(PUBLIC_DIR, file);
   try {
@@ -161,7 +179,8 @@ const userSchema = new mongoose.Schema({
   cnicFront:       { type: String, default: '' },
   cnicBack:        { type: String, default: '' },
   licensePhoto:    { type: String, default: '' },
-  vehicleRegPhoto: { type: String, default: '' }
+  vehicleRegPhoto: { type: String, default: '' },
+  cnicNumber:      { type: String, default: '' }       // customer identity number
 }, { timestamps: true });
 
 const rideSchema = new mongoose.Schema({
@@ -377,9 +396,12 @@ function requirePerm(permName) {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, phone, role, vehicleType, vehicleModel, vehiclePlate,
-            profilePhoto, licensePhoto, cnicFront, cnicBack } = req.body;
+            profilePhoto, licensePhoto, cnicFront, cnicBack, cnicNumber } = req.body;
     if (!name || !password) return res.status(400).json({ error: 'Name and password are required' });
     if (!phone)             return res.status(400).json({ error: 'Phone number is required' });
+    const resolvedRoleEarly = role || 'customer';
+    if (resolvedRoleEarly === 'customer' && !cnicNumber)
+      return res.status(400).json({ error: 'CNIC / Identity Card Number is required' });
 
     const resolvedEmail = email ? email.toLowerCase().trim() : null;
 
@@ -400,10 +422,11 @@ app.post('/api/auth/register', async (req, res) => {
       vehicleType:   vehicleType    || '',
       vehicleModel:  vehicleModel   || '',
       vehiclePlate:  vehiclePlate   || '',
-      profilePhoto:  profilePhoto   || '',
-      licensePhoto:  licensePhoto   || '',
-      cnicFront:     cnicFront      || '',
-      cnicBack:      cnicBack       || ''
+      profilePhoto:  saveDocToDisk(profilePhoto, 'profile'),
+      licensePhoto:  saveDocToDisk(licensePhoto, 'license'),
+      cnicFront:     saveDocToDisk(cnicFront,    'cnicFront'),
+      cnicBack:      saveDocToDisk(cnicBack,      'cnicBack'),
+      cnicNumber:    cnicNumber     || ''
     });
     await Wallet.create({ user: user._id, balance: 0, transactions: [] });
 
@@ -1570,11 +1593,11 @@ app.put('/api/auth/profile/photos', authMiddleware, async (req, res) => {
   try {
     const { profilePhoto, licensePhoto, cnicFront, cnicBack, vehicleRegPhoto } = req.body;
     const update = {};
-    if (profilePhoto   !== undefined) update.profilePhoto   = profilePhoto;
-    if (licensePhoto   !== undefined) update.licensePhoto   = licensePhoto;
-    if (cnicFront      !== undefined) update.cnicFront      = cnicFront;
-    if (cnicBack       !== undefined) update.cnicBack       = cnicBack;
-    if (vehicleRegPhoto !== undefined) update.vehicleRegPhoto = vehicleRegPhoto;
+    if (profilePhoto    !== undefined) update.profilePhoto    = saveDocToDisk(profilePhoto,    'profile');
+    if (licensePhoto    !== undefined) update.licensePhoto    = saveDocToDisk(licensePhoto,    'license');
+    if (cnicFront       !== undefined) update.cnicFront       = saveDocToDisk(cnicFront,       'cnicFront');
+    if (cnicBack        !== undefined) update.cnicBack        = saveDocToDisk(cnicBack,        'cnicBack');
+    if (vehicleRegPhoto !== undefined) update.vehicleRegPhoto = saveDocToDisk(vehicleRegPhoto, 'vehicleReg');
     await User.updateOne({ _id: req.user.id }, update);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }

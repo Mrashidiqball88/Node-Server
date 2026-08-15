@@ -95,6 +95,8 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 .btn-clear-loc{display:none;position:absolute;right:.55rem;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;border:none;background:#2a2a3a;color:#94a3b8;font-size:.7rem;line-height:1;cursor:pointer;z-index:2;align-items:center;justify-content:center}
 .btn-clear-loc.visible{display:flex}
 .btn-clear-loc:hover{background:#3a3a50;color:#fff}
+.btn-locate-me{position:absolute;right:2.2rem;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;border:none;background:transparent;color:#f5c518;font-size:.95rem;line-height:1;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center;padding:0;opacity:.85}
+.btn-locate-me:hover{opacity:1;background:#1a1a2a}
 .location-input:focus{border-color:#f5c518}
 .location-input.has-val{border-color:#2d5a2d}
 .location-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1a1a2a;border:1px solid #333;border-radius:10px;max-height:185px;overflow-y:auto;z-index:500;display:none;box-shadow:0 8px 24px rgba(0,0,0,.6)}
@@ -311,6 +313,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
     <div id="register-form" style="display:none">
       <div class="form-group"><label>Full Name <span style="color:#f5c518">*</span></label><input type="text" id="r-name" placeholder="Your full name"></div>
       <div class="form-group"><label>Phone Number <span style="color:#f5c518">*</span></label><input type="tel" id="r-phone" placeholder="+92 300 0000000" inputmode="tel"></div>
+      <div class="form-group"><label>CNIC / Identity Card Number <span style="color:#f5c518">*</span></label><input type="text" id="r-cnic" placeholder="e.g. 35202-1234567-9" inputmode="numeric" maxlength="20"></div>
       <div class="form-group"><label>Email <span style="color:#555;font-size:.75em">(optional)</span></label><input type="email" id="r-email" placeholder="you@email.com"></div>
       <div class="form-group">
         <label>Password <span style="color:#f5c518">*</span></label>
@@ -405,6 +408,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
                oninput="onLocInput('pickup');updateClearBtn('pickup')"
                onfocus="onLocFocus('pickup')"
                onblur="onLocBlur('pickup')">
+        <button class="btn-locate-me" onclick="locateMe()" title="Use my current location">🎯</button>
         <button class="btn-clear-loc" id="clear-pickup" onclick="clearLocation('pickup')" title="Clear pickup">✕</button>
         <div class="location-dropdown" id="pickup-dropdown"></div>
       </div>
@@ -791,13 +795,15 @@ async function doLogin() {
 async function doRegister() {
   const name  = document.getElementById('r-name').value.trim();
   const phone = document.getElementById('r-phone').value.trim();
+  const cnic  = document.getElementById('r-cnic').value.trim();
   const email = document.getElementById('r-email').value.trim();
   const pass  = document.getElementById('r-pass').value;
-  if (!name) return (document.getElementById('auth-error').textContent = 'Full name is required');
+  if (!name)  return (document.getElementById('auth-error').textContent = 'Full name is required');
   if (!phone) return (document.getElementById('auth-error').textContent = 'Phone number is required');
+  if (!cnic)  return (document.getElementById('auth-error').textContent = 'CNIC / Identity Card Number is required');
   if (pass.length < 6) return (document.getElementById('auth-error').textContent = 'Password must be at least 6 characters');
   try {
-    const res = await apiCall('/api/auth/register', 'POST', { name, phone, email, password: pass, role: 'customer' });
+    const res = await apiCall('/api/auth/register', 'POST', { name, phone, email, password: pass, role: 'customer', cnicNumber: cnic });
     saveSession(res);
   } catch (e) { document.getElementById('auth-error').textContent = e.message; }
 }
@@ -969,10 +975,11 @@ function initMap() {
       setStop(idx, lat, lng);
     }
   });
+  // Auto-set pickup to current location on first map open
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(pos => {
-      map.setView([pos.coords.latitude, pos.coords.longitude], 16);
-    }, () => {});
+      if (!pickup) setPickup(pos.coords.latitude, pos.coords.longitude);
+    }, () => {}, { enableHighAccuracy: true, timeout: 8000 });
   }
   // Start showing nearby online drivers after map is ready
   setTimeout(startNearbyDrivers, 800);
@@ -1182,6 +1189,19 @@ async function setStop(idx, lat, lng, preDisplay = null) {
   } else {
     map.setView([lat, lng], 14);
   }
+}
+
+// ── Locate Me (re-center map + set pickup to live GPS position) ───────────
+function locateMe() {
+  if (!navigator.geolocation) return showToast('Geolocation not supported by this browser', 'error');
+  const inp = document.getElementById('pickup-input');
+  if (inp) { inp.value = '📍 Locating…'; inp.classList.add('has-val'); }
+  navigator.geolocation.getCurrentPosition(pos => {
+    setPickup(pos.coords.latitude, pos.coords.longitude);
+  }, () => {
+    showToast('Could not get your location — check GPS permissions', 'error');
+    if (inp && inp.value === '📍 Locating…') { inp.value = ''; inp.classList.remove('has-val'); }
+  }, { enableHighAccuracy: true, timeout: 10000 });
 }
 
 // ── Clear Location ────────────────────────────────────────────────────────
