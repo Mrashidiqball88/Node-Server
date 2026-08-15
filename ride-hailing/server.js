@@ -214,8 +214,9 @@ const walletSchema = new mongoose.Schema({
 
 // Sub-Admin schema — granular-permission secondary admin accounts (max 50)
 const subAdminSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true, trim: true },
-  password: { type: String, required: true },
+  username:  { type: String, required: true, unique: true, trim: true },
+  password:  { type: String, required: true },
+  isBlocked: { type: Boolean, default: false },
   permissions: {
     approveDrivers: { type: Boolean, default: false },
     blockDrivers:   { type: Boolean, default: false },
@@ -1242,6 +1243,7 @@ app.post('/api/admin/sub-user/login', async (req, res) => {
     if (!sub) return res.status(401).json({ error: 'Invalid credentials' });
     const match = await bcrypt.compare(password, sub.password);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    if (sub.isBlocked) return res.status(403).json({ error: 'Your sub-admin account is currently blocked by Super Admin.' });
     const token = jwt.sign(
       { isSubAdmin: true, subAdminId: sub._id, username: sub.username, permissions: sub.permissions },
       JWT_SECRET, { expiresIn: '8h' }
@@ -1282,11 +1284,35 @@ app.get('/api/admin/sub-users/list', adminJwt, requireSuperAdmin, async (req, re
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PUT /api/admin/sub-users/update-permissions
-app.put('/api/admin/sub-users/update-permissions', adminJwt, requireSuperAdmin, async (req, res) => {
+// PUT /api/admin/sub-users/update — update permissions, password, and/or isBlocked
+app.put('/api/admin/sub-users/update', adminJwt, requireSuperAdmin, async (req, res) => {
   try {
-    const { id, permissions } = req.body;
-    if (!id || !permissions) return res.status(400).json({ error: 'id and permissions required' });
+    const { id, permissions, password, isBlocked } = req.body;
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const setFields = {};
+    if (permissions) {
+      setFields.permissions = {
+        approveDrivers: !!permissions.approveDrivers,
+        blockDrivers:   !!permissions.blockDrivers,
+        blockCustomers: !!permissions.blockCustomers,
+        manageWallets:  !!permissions.manageWallets,
+        viewRides:      permissions.viewRides !== false
+      };
+    }
+    if (typeof isBlocked === 'boolean') setFields.isBlocked = isBlocked;
+    if (password && password.trim()) setFields.password = await bcrypt.hash(password.trim(), 10);
+    const sub = await SubAdmin.findByIdAndUpdate(id, { $set: setFields }, { new: true }).select('-password');
+    if (!sub) return res.status(404).json({ error: 'Sub-admin not found' });
+    res.json({ success: true, subAdmin: sub });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Keep legacy alias so any existing callers still work
+app.put('/api/admin/sub-users/update-permissions', adminJwt, requireSuperAdmin, async (req, res) => {
+  req.body = { ...req.body, id: req.body.id };
+  const { id, permissions } = req.body;
+  if (!id || !permissions) return res.status(400).json({ error: 'id and permissions required' });
+  try {
     const sub = await SubAdmin.findByIdAndUpdate(id,
       { $set: { permissions: {
         approveDrivers: !!permissions.approveDrivers,

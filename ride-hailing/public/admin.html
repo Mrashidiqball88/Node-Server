@@ -600,16 +600,34 @@ input[type=date]:focus{border-color:#f5c518}
   </div>
 </div>
 
-<!-- ── Edit Sub-Admin Permissions Modal ── -->
+<!-- ── Edit Sub-Admin Modal ── -->
 <div class="modal-backdrop" id="sa-edit-modal">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-title" id="sa-edit-title">✏️ Edit Permissions</div>
+      <div class="modal-title" id="sa-edit-title">✏️ Edit Sub-Admin</div>
       <button class="btn-close" onclick="closeModal('sa-edit-modal')">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="sa-edit-id">
-      <div style="font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Permissions</div>
+
+      <!-- Password section -->
+      <div style="font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">New Password</div>
+      <div style="position:relative;margin-bottom:1.1rem">
+        <input class="modal-input" id="pe-password" type="password" placeholder="Leave blank to keep current password" style="padding-right:2.6rem">
+        <button type="button" id="pe-pw-toggle" onclick="togglePwVisibility()"
+          style="position:absolute;right:.65rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#475569;cursor:pointer;font-size:1rem;padding:.2rem;line-height:1"
+          title="Show / hide password">👁</button>
+      </div>
+
+      <!-- Account Status section -->
+      <div style="font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">Account Status</div>
+      <label class="perm-row" style="margin-bottom:1.1rem;border-color:#3a0808" id="pe-block-row">
+        <input type="checkbox" id="pe-isBlocked">
+        <label for="pe-isBlocked" style="color:#ef4444;font-weight:600">Block this Sub-Admin Account</label>
+      </label>
+
+      <!-- Permissions section -->
+      <div style="font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">Permissions</div>
       <div class="perm-grid">
         <label class="perm-row"><input type="checkbox" id="pe-approveDrivers"><label for="pe-approveDrivers">Approve Drivers</label></label>
         <label class="perm-row"><input type="checkbox" id="pe-blockDrivers"><label for="pe-blockDrivers">Block Drivers</label></label>
@@ -621,7 +639,7 @@ input[type=date]:focus{border-color:#f5c518}
     </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('sa-edit-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveSubAdminPerms()">Save Permissions</button>
+      <button class="btn btn-primary" onclick="saveSubAdminPerms()">💾 Save Changes</button>
     </div>
   </div>
 </div>
@@ -1520,9 +1538,13 @@ async function loadSubAdmins() {
     const chip = (on) => `<span class="perm-chip ${on ? 'perm-on' : 'perm-off'}">${on ? '✓' : '—'}</span>`;
     tbody.innerHTML = subs.map(s => {
       const pr = s.permissions || {};
-      const permsJson = JSON.stringify(pr).replace(/"/g, '&quot;');
-      return `<tr>
-        <td><strong style="color:#e2e8f0">${s.username}</strong></td>
+      const permsJson  = JSON.stringify(pr).replace(/"/g, '&quot;');
+      const isBlocked  = !!s.isBlocked;
+      return `<tr style="${isBlocked ? 'opacity:.6' : ''}">
+        <td>
+          <strong style="color:#e2e8f0">${s.username}</strong>
+          ${isBlocked ? '<span class="badge badge-blocked" style="margin-left:.4rem;font-size:.6rem">BLOCKED</span>' : ''}
+        </td>
         <td style="text-align:center">${chip(pr.approveDrivers)}</td>
         <td style="text-align:center">${chip(pr.blockDrivers)}</td>
         <td style="text-align:center">${chip(pr.blockCustomers)}</td>
@@ -1530,7 +1552,7 @@ async function loadSubAdmins() {
         <td style="text-align:center">${chip(pr.viewRides)}</td>
         <td style="font-size:.72rem;color:#475569">${fmtDate(s.createdAt)}</td>
         <td><div style="display:flex;gap:.3rem">
-          <button class="btn btn-blue" onclick="editSubAdmin('${s._id}','${s.username}','${permsJson}')">✏️ Edit</button>
+          <button class="btn btn-blue" onclick="editSubAdmin('${s._id}','${s.username}','${permsJson}',${isBlocked})">✏️ Edit</button>
           <button class="btn btn-red"  onclick="deleteSubAdmin('${s._id}','${s.username}')">🗑</button>
         </div></td>
       </tr>`;
@@ -1568,10 +1590,19 @@ async function createSubAdmin() {
   } catch (e) { errEl.textContent = e.message; }
 }
 
-function editSubAdmin(id, username, permsRaw) {
+function editSubAdmin(id, username, permsRaw, isBlocked) {
   const pr = (typeof permsRaw === 'string') ? JSON.parse(permsRaw.replace(/&quot;/g, '"')) : permsRaw;
-  document.getElementById('sa-edit-id').value = id;
+  document.getElementById('sa-edit-id').value          = id;
   document.getElementById('sa-edit-title').textContent = `✏️ Edit: ${username}`;
+  // Password — always clear so blank means "no change"
+  const pwField = document.getElementById('pe-password');
+  pwField.value = '';
+  pwField.type  = 'password';
+  // Block status
+  const blocked = isBlocked === true || isBlocked === 'true';
+  document.getElementById('pe-isBlocked').checked      = blocked;
+  document.getElementById('pe-block-row').style.borderColor = blocked ? '#ef4444' : '#3a0808';
+  // Permissions
   document.getElementById('pe-approveDrivers').checked = !!pr.approveDrivers;
   document.getElementById('pe-blockDrivers').checked   = !!pr.blockDrivers;
   document.getElementById('pe-blockCustomers').checked = !!pr.blockCustomers;
@@ -1581,8 +1612,17 @@ function editSubAdmin(id, username, permsRaw) {
   openModal('sa-edit-modal');
 }
 
+function togglePwVisibility() {
+  const f = document.getElementById('pe-password');
+  const b = document.getElementById('pe-pw-toggle');
+  if (f.type === 'password') { f.type = 'text';     b.textContent = '🙈'; }
+  else                       { f.type = 'password'; b.textContent = '👁'; }
+}
+
 async function saveSubAdminPerms() {
-  const id = document.getElementById('sa-edit-id').value;
+  const id        = document.getElementById('sa-edit-id').value;
+  const password  = document.getElementById('pe-password').value.trim();
+  const isBlocked = document.getElementById('pe-isBlocked').checked;
   const permissions = {
     approveDrivers: document.getElementById('pe-approveDrivers').checked,
     blockDrivers:   document.getElementById('pe-blockDrivers').checked,
@@ -1590,10 +1630,12 @@ async function saveSubAdminPerms() {
     manageWallets:  document.getElementById('pe-manageWallets').checked,
     viewRides:      document.getElementById('pe-viewRides').checked
   };
+  const payload = { id, permissions, isBlocked };
+  if (password) payload.password = password;   // only send if non-empty
   try {
-    await api('/api/admin/sub-users/update-permissions', 'PUT', { id, permissions });
+    await api('/api/admin/sub-users/update', 'PUT', payload);
     closeModal('sa-edit-modal');
-    showToast('Permissions updated ✓', 'success');
+    showToast('Sub-admin updated ✓', 'success');
     loadSubAdmins();
   } catch (e) { document.getElementById('sa-edit-err').textContent = e.message; }
 }
