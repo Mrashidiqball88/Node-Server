@@ -869,13 +869,32 @@ function saveSession(res) {
 
 function doLogout() {
   closeDotsMenu();
-  localStorage.clear(); token = null; user = null; activeRide = null;
-  if (socket) socket.disconnect();
-  if (locationWatchId) navigator.geolocation.clearWatch(locationWatchId);
+
+  // 1. Wipe all auth state from memory and storage
+  localStorage.clear();
+  sessionStorage.clear();
+  token = null; user = null; activeRide = null;
+
+  // 2. Disconnect live connections
+  if (socket) { socket.disconnect(); socket = null; }
+  if (locationWatchId) { navigator.geolocation.clearWatch(locationWatchId); locationWatchId = null; }
+  stopNearbyDrivers();
+
+  // 3. Clear every login / register field so nothing persists visually
+  ['l-email', 'l-pass',
+   'r-name', 'r-phone', 'r-cnic', 'r-email', 'r-pass',
+   'fp-phone', 'fp-otp', 'fp-newpass'
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('auth-error').textContent = '';
+
+  // 4. Show auth screen, hide app panels
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   document.getElementById('active-ride').style.display = 'none';
   switchTab('login');
+
+  // 5. Replace history entry so the Back button cannot return to the app
+  history.replaceState(null, '', location.pathname);
 }
 
 // ── 3-Dots Dropdown Menu ──────────────────────────────────────────────────

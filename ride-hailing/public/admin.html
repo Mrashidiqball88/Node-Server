@@ -816,14 +816,30 @@ async function adminLogin() {
 }
 
 function adminLogout() {
-  localStorage.removeItem('admin_token');
-  localStorage.removeItem('admin_email');
-  adminToken = null;
+  // Disconnect live socket
+  if (socket) { socket.disconnect(); socket = null; }
+
+  // Wipe all auth state from memory and storage
+  localStorage.clear();
+  sessionStorage.clear();
+  adminToken   = null;
   isSuperAdmin = true;
-  adminPerms = {};
-  if (socket) socket.disconnect();
+  adminPerms   = {};
+
+  // Clear every login form field so no credentials linger
+  ['a-email', 'a-pass', 'sa-username', 'sa-pass'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('a-err').textContent = '';
+  switchAuthTab('superadmin');
+
+  // Show auth overlay, hide app
   document.getElementById('admin-app').style.display = 'none';
   document.getElementById('auth-overlay').style.display = 'flex';
+
+  // Replace history so Back button cannot return to the admin panel
+  history.replaceState(null, '', location.pathname);
 }
 
 function switchAuthTab(type) {

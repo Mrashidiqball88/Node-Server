@@ -942,12 +942,29 @@ function saveSession(res) {
 }
 
 function doLogout() {
-  if (socket) { socket.emit('driver:status', { isOnline: false }); socket.disconnect(); }
-  if (locationWatch) navigator.geolocation.clearWatch(locationWatch);
+  // 1. Go offline and disconnect before clearing state
+  if (socket) { socket.emit('driver:status', { isOnline: false }); socket.disconnect(); socket = null; }
+  if (locationWatch) { navigator.geolocation.clearWatch(locationWatch); locationWatch = null; }
+
+  // 2. Wipe all auth state from memory and storage
   localStorage.clear();
+  sessionStorage.clear();
   token = null; sessionToken = null; user = null;
+
+  // 3. Clear every login / register field so nothing persists visually
+  ['l-email', 'l-pass',
+   'r-phone', 'r-pass',
+   'dfp-phone', 'dfp-otp', 'dfp-newpass'
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('auth-error').textContent = '';
+
+  // 4. Show auth screen on the login tab
+  switchTab('login');
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
+
+  // 5. Replace history entry so the Back button cannot return to the app
+  history.replaceState(null, '', location.pathname);
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
