@@ -4,6 +4,7 @@
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
+const { computeBackfillPaidUntil } = require('./lib/backfillPaidUntil');
 
 // ─── Global crash protection ──────────────────────────────────────────────────
 // Catch any unhandled error/rejection so the server never exits unexpectedly.
@@ -471,16 +472,10 @@ app.post('/api/auth/login', async (req, res) => {
     // Back-fill paidUntilDate for drivers who paid under the old system
     // (lastDailyFeePaidAt set, paidUntilDate still null). Run silently so
     // no previously-paid driver is locked out after the daily-fee update.
-    if (user.role === 'driver' && !user.paidUntilDate && user.lastDailyFeePaidAt) {
-      const todayUTCMidnight = new Date();
-      todayUTCMidnight.setUTCHours(0, 0, 0, 0);
-      if (user.lastDailyFeePaidAt >= todayUTCMidnight) {
-        // Paid today under the old system — grant access through end of today UTC
-        const endOfTodayUTC = new Date(todayUTCMidnight);
-        endOfTodayUTC.setUTCHours(23, 59, 59, 999);
-        await User.updateOne({ _id: user._id }, { paidUntilDate: endOfTodayUTC });
-        user.paidUntilDate = endOfTodayUTC;
-      }
+    const backfillDate = computeBackfillPaidUntil(user);
+    if (backfillDate) {
+      await User.updateOne({ _id: user._id }, { paidUntilDate: backfillDate });
+      user.paidUntilDate = backfillDate;
     }
 
     // Generate a new single-device session token and overwrite any previous one
