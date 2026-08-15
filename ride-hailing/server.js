@@ -139,6 +139,7 @@ const userSchema = new mongoose.Schema({
   // Daily platform fee tracking
   lastDailyFeePaidAt: { type: Date,   default: null },
   dailyFeeAmount:     { type: Number, default: 200  },
+  paidUntilDate:      { type: Date,   default: null },   // set when daily fee paid or admin grants waiver
   // Driver verification documents (URL strings)
   profilePhoto:    { type: String, default: '' },
   cnicFront:       { type: String, default: '' },
@@ -405,7 +406,8 @@ app.post('/api/auth/register', async (req, res) => {
               role: user.role, accountStatus: user.accountStatus,
               vehicleType: user.vehicleType,
               vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate,
-              lastDailyFeePaidAt: null, dailyFeeAmount: 200 }
+              lastDailyFeePaidAt: null, dailyFeeAmount: 200,
+              paidUntilDate: null, dailyFeeRate: DAILY_FEE_RATES[user.vehicleType] || 220 }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -444,7 +446,9 @@ app.post('/api/auth/login', async (req, res) => {
               vehicleType: user.vehicleType,
               vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate, rating: user.rating,
               lastDailyFeePaidAt: user.lastDailyFeePaidAt || null,
-              dailyFeeAmount: user.dailyFeeAmount || 200 }
+              dailyFeeAmount: user.dailyFeeAmount || 200,
+              paidUntilDate:  user.paidUntilDate  || null,
+              dailyFeeRate:   DAILY_FEE_RATES[user.vehicleType] || 220 }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -971,7 +975,9 @@ app.post('/api/wallet/add-funds', authMiddleware, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Daily earnings targets per vehicle category (PKR)
-const DAILY_TARGETS = { 'Bike': 2500, 'Rickshaw': 4000, 'Car Mini': 5500, 'Car AC': 6500 };
+const DAILY_TARGETS   = { 'Bike': 2500, 'Rickshaw': 4000, 'Car Mini': 5500, 'Car AC': 6500 };
+// Vehicle-based daily platform fee rates (24-hour cycle)
+const DAILY_FEE_RATES = { 'Bike': 70,   'Rickshaw': 130,  'Car Mini': 220,  'Car AC': 270  };
 
 // Helper: today's date string in UTC (YYYY-MM-DD)
 function todayUTC() {
@@ -1012,8 +1018,10 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
       submittedDate:   dateStr
     });
 
-    // Mark daily fee as paid immediately upon TRX submission (unlocks ride acceptance)
-    await User.updateOne({ _id: req.user.id }, { lastDailyFeePaidAt: new Date() }).catch(() => {});
+    // Mark daily fee as paid immediately upon TRX submission (unlocks ride acceptance for today)
+    const paidUntilDate = new Date();
+    paidUntilDate.setUTCHours(23, 59, 59, 999);   // end of current UTC day
+    await User.updateOne({ _id: req.user.id }, { lastDailyFeePaidAt: new Date(), paidUntilDate }).catch(() => {});
 
     res.status(201).json(payment);
   } catch (err) {
@@ -1720,6 +1728,23 @@ app.post('/api/admin/drivers/grant-trial', adminJwt, requirePerm('manageWallets'
       results.push({ id: driver._id, name: driver.name, amount });
     }
     res.json({ success: true, credited: results.length, results });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/admin/drivers/grant-fee-waiver — set paidUntilDate for selected drivers (waiver / advance pay)
+app.post('/api/admin/drivers/grant-fee-waiver', adminJwt, requirePerm('manageWallets'), async (req, res) => {
+  try {
+    const { driverIds, paidUntilDate } = req.body;
+    if (!Array.isArray(driverIds) || !driverIds.length)
+      return res.status(400).json({ error: 'driverIds array required' });
+    if (!paidUntilDate) return res.status(400).json({ error: 'paidUntilDate required' });
+    const until = new Date(paidUntilDate);
+    until.setUTCHours(23, 59, 59, 999);   // include the full selected day
+    if (isNaN(until)) return res.status(400).json({ error: 'Invalid date' });
+    await User.updateMany({ _id: { $in: driverIds }, role: 'driver' }, { paidUntilDate: until });
+    // Instantly notify each driver via socket so their Accept button lights up immediately
+    driverIds.forEach(id => io.to(`user:${id}`).emit('fee:waived', { paidUntilDate: until.toISOString() }));
+    res.json({ success: true, count: driverIds.length, paidUntilDate: until });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

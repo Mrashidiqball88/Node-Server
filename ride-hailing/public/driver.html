@@ -445,6 +445,16 @@ textarea.support-input{resize:vertical;min-height:85px}
     </div>
   </div>
 
+  <!-- Daily Fee Info Bar -->
+  <div id="fee-info-bar" style="display:none;background:#0d0d1a;border-bottom:1px solid #1e1a0a;padding:.4rem 1rem;font-size:.75rem;color:#888;flex-wrap:wrap;align-items:center;gap:.6rem">
+    <span>🚗</span>
+    <span id="fee-vehicle-text" style="color:#cbd5e1;font-weight:600">—</span>
+    <span style="color:#2a2a3a">|</span>
+    <span id="fee-rate-text" style="color:#94a3b8">—</span>
+    <span style="color:#2a2a3a">|</span>
+    <span id="fee-status-text">—</span>
+  </div>
+
   <!-- Pending Approval Card (shown when accountStatus === 'pending') -->
   <div id="pending-card" class="pending-card" style="display:none">
     <div class="pending-card-icon">⏳</div>
@@ -1139,6 +1149,14 @@ function connectSocket() {
     showToast('🎉 Your account has been approved! You can now go online.', 'success');
   });
 
+  // Admin granted a fee waiver — instantly unlock Accept button
+  socket.on('fee:waived', ({ paidUntilDate }) => {
+    if (paidUntilDate) user.paidUntilDate = paidUntilDate;
+    localStorage.setItem('rh_user', JSON.stringify(user));
+    unlockAcceptButton();
+    showToast('✅ Daily fee waived by admin — ride acceptance is now active!', 'success');
+  });
+
   // Account suspended / balance too low
   socket.on('account:suspended', ({ reason }) => {
     showToast(reason, 'error');
@@ -1281,7 +1299,8 @@ function showRideRequest(ride) {
   if (acceptBtn) {
     if (dailyFeeDue) {
       acceptBtn.disabled = true;
-      acceptBtn.textContent = '💳 Pay Daily Fee to Accept';
+      const _rate = user?.dailyFeeRate || DAILY_FEE_RATES[user?.vehicleType] || 220;
+      acceptBtn.textContent = `Pay Rs ${_rate} Daily Fee to Accept`;
       acceptBtn.style.opacity = '0.5';
       acceptBtn.style.cursor  = 'not-allowed';
     } else {
@@ -1765,7 +1784,13 @@ async function submitTrxPayment() {
       amount:      Number(amount),
       paymentType: selectedPayType || 'jazzcash'
     });
-    showToast('Payment submitted! Awaiting admin approval.', 'success');
+    // Optimistic local unlock — treat as paid for the rest of today
+    const _until = new Date();
+    _until.setUTCHours(23, 59, 59, 999);
+    user.paidUntilDate = _until.toISOString();
+    localStorage.setItem('rh_user', JSON.stringify(user));
+    unlockAcceptButton();
+    showToast('✅ Payment submitted! Ride acceptance is now active.', 'success');
     document.getElementById('trx-id-input').value     = '';
     document.getElementById('trx-amount-input').value = '';
     const ss = document.getElementById('trx-screenshot');
@@ -1987,22 +2012,6 @@ else if (token && user && user.role !== 'driver') {
   <p style="color:#333;font-size:.7rem">Do not close this page</p>
 </div>
 
-<!-- ── Daily Platform Fee Modal (non-dismissable) ───────────────────────── -->
-<div id="daily-fee-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:3000;align-items:center;justify-content:center">
-  <div style="background:#1a1a2a;border:2px solid #f5c518;border-radius:16px;padding:1.75rem;max-width:360px;width:92%;margin:auto">
-    <div style="font-size:2.5rem;text-align:center;margin-bottom:.4rem">💳</div>
-    <h3 style="color:#f5c518;text-align:center;margin:0 0 .4rem;font-size:1.1rem">Daily Platform Fee Due</h3>
-    <p style="color:#aaa;font-size:.82rem;text-align:center;margin-bottom:1.25rem">Pay <strong style="color:#fff">Rs <span id="dfee-amount">200</span></strong> to activate ride acceptance for today.</p>
-    <div style="background:#0d0d1a;border-radius:10px;padding:.9rem;margin-bottom:.9rem;font-size:.78rem;color:#777;line-height:1.7">
-      Send via JazzCash / EasyPaisa to:<br>
-      <span id="dfee-accounts" style="color:#f5c518">Loading payment details…</span>
-    </div>
-    <input type="text" id="dfee-trx" placeholder="Paste TRX / Transaction ID here" style="width:100%;padding:.75rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.4rem;box-sizing:border-box;font-size:.875rem">
-    <p id="dfee-err" style="color:#ff4444;font-size:.77rem;min-height:1em;margin-bottom:.6rem"></p>
-    <button id="dfee-submit-btn" onclick="submitDailyFee()" style="width:100%;padding:.85rem;border-radius:8px;border:none;background:#f5c518;color:#000;font-weight:700;font-size:.95rem;cursor:pointer">✓ Submit Payment &amp; Activate</button>
-    <p style="color:#444;font-size:.7rem;text-align:center;margin-top:.6rem">Submission is instant. Admin verifies within minutes.</p>
-  </div>
-</div>
 
 <!-- ── Change Phone Modal ─────────────────────────────────────────────────── -->
 <div id="change-phone-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2100;align-items:center;justify-content:center">
@@ -2059,49 +2068,44 @@ function setUploadProgress(pct) {
 }
 
 // ── Daily Platform Fee ─────────────────────────────────────────────────────
+const DAILY_FEE_RATES = { 'Bike': 70, 'Rickshaw': 130, 'Car Mini': 220, 'Car AC': 270 };
+
 function checkDailyFee() {
   if (!user || user.role !== 'driver') return;
-  const lastPaid  = user.lastDailyFeePaidAt ? new Date(user.lastDailyFeePaidAt) : null;
-  const ago24h    = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  if (!lastPaid || lastPaid < ago24h) {
-    dailyFeeDue = true;
-    const amtEl = document.getElementById('dfee-amount');
-    if (amtEl) amtEl.textContent = user.dailyFeeAmount || 200;
-    fetch('/api/settings/payment').then(r => r.json()).then(d => {
-      const accs  = d.accounts || {};
-      const lines = Object.entries(accs).map(([k, v]) => `${k}: ${v.number || v}`).join('  ·  ');
-      const el = document.getElementById('dfee-accounts');
-      if (el) el.textContent = lines || 'Contact admin for payment details';
-    }).catch(() => {});
-    const modal = document.getElementById('daily-fee-modal');
-    if (modal) modal.style.display = 'flex';
+  const feeRate   = user.dailyFeeRate || DAILY_FEE_RATES[user.vehicleType] || 220;
+  const paidUntil = user.paidUntilDate ? new Date(user.paidUntilDate) : null;
+  dailyFeeDue     = !paidUntil || paidUntil < new Date();
+
+  // Show and update the fee info bar
+  const barEl    = document.getElementById('fee-info-bar');
+  const statusEl = document.getElementById('fee-status-text');
+  const rateEl   = document.getElementById('fee-rate-text');
+  const vehicleEl = document.getElementById('fee-vehicle-text');
+  if (barEl)     barEl.style.display    = 'flex';
+  if (vehicleEl) vehicleEl.textContent  = user.vehicleType || 'Vehicle';
+  if (rateEl)    rateEl.textContent     = `Daily Fee: Rs ${feeRate}`;
+  if (statusEl) {
+    if (dailyFeeDue) {
+      statusEl.textContent = '⚠ Fee unpaid — Accept disabled';
+      statusEl.style.color = '#f59e0b';
+    } else {
+      const ds = paidUntil ? paidUntil.toLocaleDateString('en-PK', { day: '2-digit', month: 'short' }) : '';
+      statusEl.textContent = `✓ Paid till ${ds}`;
+      statusEl.style.color = '#22c55e';
+    }
   }
 }
 
-async function submitDailyFee() {
-  const trxId = document.getElementById('dfee-trx').value.trim();
-  const errEl = document.getElementById('dfee-err');
-  const btn   = document.getElementById('dfee-submit-btn');
-  if (!trxId) { errEl.textContent = 'TRX ID is required'; return; }
-  errEl.textContent = '';
-  btn.disabled = true; btn.textContent = '⏳ Submitting…';
-  try {
-    const amount = user?.dailyFeeAmount || 200;
-    await apiCall('/api/payments/submit', 'POST', { trxId, amount, paymentType: 'jazzcash' });
-    dailyFeeDue = false;
-    user.lastDailyFeePaidAt = new Date().toISOString();
-    localStorage.setItem('rh_user', JSON.stringify(user));
-    document.getElementById('daily-fee-modal').style.display = 'none';
-    showToast('✅ Daily fee submitted! Ride acceptance is now active.', 'success');
-    // Re-enable accept button immediately if a ride popup is open
-    const acceptBtn = document.querySelector('.btn-accept');
-    if (acceptBtn && pendingRide) {
-      acceptBtn.disabled = false; acceptBtn.textContent = '✓ Accept';
-      acceptBtn.style.opacity = ''; acceptBtn.style.cursor = '';
-    }
-  } catch (e) {
-    errEl.textContent = e.message;
-    btn.disabled = false; btn.textContent = '✓ Submit Payment & Activate';
+// Unlock the Accept button (called after payment submit or admin fee:waived event)
+function unlockAcceptButton() {
+  dailyFeeDue = false;
+  checkDailyFee();
+  const acceptBtn = document.querySelector('.btn-accept');
+  if (acceptBtn && pendingRide) {
+    acceptBtn.disabled      = false;
+    acceptBtn.textContent   = '✓ Accept';
+    acceptBtn.style.opacity = '';
+    acceptBtn.style.cursor  = '';
   }
 }
 

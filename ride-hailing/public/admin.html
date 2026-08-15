@@ -330,15 +330,17 @@ input[type=date]:focus{border-color:#f5c518}
               <div class="ftab" onclick="loadDrivers('blocked');setFTab(this)">Blocked</div>
             </div>
             <button id="bulk-trial-btn" class="btn btn-yellow" onclick="grantBulkTrial()" disabled>🎁 Grant 1-Month Trial</button>
+            <input type="date" id="waiver-date-input" title="Grant Fee Paid Until this date" style="background:#06060e;border:1px solid #1e1e2e;border-radius:8px;padding:.35rem .65rem;color:#94a3b8;font-size:.78rem;outline:none;cursor:pointer">
+            <button id="waiver-btn" class="btn btn-green" onclick="grantFeeWaiver()" disabled>📅 Grant Fee Paid Until</button>
             <button class="btn-refresh" onclick="loadDrivers(currentDriverStatus)">↻</button>
           </div>
         </div>
         <div class="table-wrap"><table class="data-table">
           <thead><tr>
             <th style="width:32px"><input type="checkbox" id="select-all-chk" onchange="toggleSelectAll(this.checked)" style="cursor:pointer"></th>
-            <th>Driver</th><th>Phone</th><th>Vehicle</th><th>Rating</th><th>Status</th><th>Joined</th><th>Actions</th>
+            <th>Driver</th><th>Phone</th><th>Vehicle</th><th>Daily Fee</th><th>Rating</th><th>Status</th><th>Joined</th><th>Actions</th>
           </tr></thead>
-          <tbody id="drivers-tbody"><tr><td colspan="8" class="loading-row">Loading…</td></tr></tbody>
+          <tbody id="drivers-tbody"><tr><td colspan="9" class="loading-row">Loading…</td></tr></tbody>
         </table></div>
       </div>
 
@@ -984,23 +986,31 @@ async function rejectPayment(id) {
 async function loadDrivers(status = 'all') {
   currentDriverStatus = status;
   const tbody = document.getElementById('drivers-tbody');
-  tbody.innerHTML = '<tr><td colspan="7" class="loading-row">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="loading-row">Loading…</td></tr>';
   try {
     const drivers = await api(`/api/admin/drivers?status=${status}`);
-    if (!drivers.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><span class="empty-icon">🚗</span>No drivers found</td></tr>'; return; }
+    if (!drivers.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><span class="empty-icon">🚗</span>No drivers found</td></tr>'; return; }
     document.getElementById('select-all-chk').checked = false;
     selectedDriverIds.clear(); updateBulkGrantBtn();
+    const FEE_RATES = { 'Bike': 70, 'Rickshaw': 130, 'Car Mini': 220, 'Car AC': 270 };
     tbody.innerHTML = drivers.map(d => {
-      const lowRating = (d.rating||5) < 3;
-      const hasPhoto = d.profilePhoto && d.profilePhoto.startsWith('data:');
+      const lowRating  = (d.rating||5) < 3;
+      const hasPhoto   = d.profilePhoto && d.profilePhoto.startsWith('data:');
       const avatarHtml = hasPhoto
         ? `<img src="${d.profilePhoto}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:1px solid #2a2a38;vertical-align:middle;margin-right:.4rem">`
         : `<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#1a1a28;color:#f5c518;font-size:.75rem;font-weight:700;vertical-align:middle;margin-right:.4rem">${(d.name||'D')[0].toUpperCase()}</span>`;
+      const dailyRate  = FEE_RATES[d.vehicleType] || 220;
+      const paidUntil  = d.paidUntilDate ? new Date(d.paidUntilDate) : null;
+      const feePaid    = paidUntil && paidUntil > new Date();
+      const feeCell    = feePaid
+        ? `<div style="font-size:.75rem;font-weight:700;color:#f5c518">Rs ${dailyRate}</div><div style="font-size:.65rem;color:#22c55e">✓ till ${paidUntil.toLocaleDateString('en-PK',{day:'2-digit',month:'short'})}</div>`
+        : `<div style="font-size:.75rem;font-weight:700;color:#f5c518">Rs ${dailyRate}</div><div style="font-size:.65rem;color:#f59e0b">⚠ unpaid</div>`;
       return `<tr>
         <td><input type="checkbox" class="driver-chk" value="${d._id}" style="cursor:pointer" onchange="toggleDriverSelect('${d._id}',this.checked)"></td>
         <td><div style="display:flex;align-items:center">${avatarHtml}<div><div style="font-weight:700;color:#e2e8f0">${d.name}</div></div></div></td>
         <td>${d.phone||'—'}</td>
         <td><div style="font-size:.75rem">${d.vehicleType||'—'}<br><span style="color:#475569">${d.vehicleModel||''} ${d.vehiclePlate||''}</span></div></td>
+        <td>${feeCell}</td>
         <td style="${lowRating?'color:#ef4444':''};font-weight:${lowRating?'700':'400'}">⭐ ${(d.rating||5).toFixed(1)}</td>
         <td>${badgeHtml(d.accountStatus||'active')}</td>
         <td style="font-size:.72rem;color:#475569">${fmtDate(d.createdAt)}</td>
@@ -1017,7 +1027,7 @@ async function loadDrivers(status = 'all') {
         </div></td>
       </tr>`;
     }).join('');
-  } catch (e) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
 }
 
 // ── 4. PASSENGERS ─────────────────────────────────────────────────────────────
@@ -1422,11 +1432,16 @@ function toggleDriverSelect(id, checked) {
 }
 
 function updateBulkGrantBtn() {
+  const n = selectedDriverIds.size;
   const btn = document.getElementById('bulk-trial-btn');
   if (btn) {
-    const n = selectedDriverIds.size;
     btn.textContent = n ? `🎁 Grant 1-Month Trial (${n} selected)` : '🎁 Grant 1-Month Trial';
     btn.disabled = n === 0;
+  }
+  const wBtn = document.getElementById('waiver-btn');
+  if (wBtn) {
+    wBtn.textContent = n ? `📅 Grant Fee Paid Until (${n} selected)` : '📅 Grant Fee Paid Until';
+    wBtn.disabled = n === 0;
   }
 }
 
@@ -1446,6 +1461,23 @@ async function grantTrial(driverId) {
   try {
     const res = await api('/api/admin/drivers/grant-trial', 'POST', { driverIds: [driverId] });
     showToast(`✓ ${res.results[0]?.name} credited Rs ${res.results[0]?.amount?.toLocaleString()}`, 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function grantFeeWaiver() {
+  if (!selectedDriverIds.size) return showToast('Select at least one driver', 'error');
+  const dateInput = document.getElementById('waiver-date-input');
+  if (!dateInput?.value) return showToast('Pick a date first using the date picker', 'error');
+  const n = selectedDriverIds.size;
+  if (!confirm(`Mark daily fee as paid until ${dateInput.value} for ${n} driver(s)?`)) return;
+  try {
+    const res = await api('/api/admin/drivers/grant-fee-waiver', 'POST', {
+      driverIds:    [...selectedDriverIds],
+      paidUntilDate: dateInput.value
+    });
+    showToast(`✓ Fee waiver granted to ${res.count} driver(s) until ${dateInput.value}`, 'success');
+    selectedDriverIds.clear();
+    loadDrivers(currentDriverStatus);
   } catch (e) { showToast(e.message, 'error'); }
 }
 
