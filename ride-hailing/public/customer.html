@@ -718,6 +718,8 @@ const TILE_OPTS  = {
 let token = localStorage.getItem('rh_token');
 let user  = JSON.parse(localStorage.getItem('rh_user') || 'null');
 let map, pickupMarker, routeLine, driverMarker;
+let nearbyDriversLayer = [];
+let nearbyPollInterval = null;
 let stopMarkers = [null, null, null, null]; // markers for each drop stop
 let pickup  = null;
 let dropoffs = [null, null, null, null];    // up to 4 stops; dropoffs[0] = main/first
@@ -964,6 +966,48 @@ function initMap() {
       map.setView([pos.coords.latitude, pos.coords.longitude], 16);
     }, () => {});
   }
+  // Start showing nearby online drivers after map is ready
+  setTimeout(startNearbyDrivers, 800);
+}
+
+// ── Nearby Drivers ────────────────────────────────────────────────────────
+const _vehicleIcons = { 'Bike': '🛵', 'Rickshaw': '🛺', 'Car Mini': '🚗', 'Car AC': '🚙' };
+
+async function pollNearbyDrivers() {
+  if (activeRide || !map || !token) return;
+  const center = pickup
+    ? { lat: pickup.lat, lng: pickup.lng }
+    : { lat: map.getCenter().lat, lng: map.getCenter().lng };
+  try {
+    const nearby = await apiCall(`/api/drivers/nearby?lat=${center.lat}&lng=${center.lng}`);
+    nearbyDriversLayer.forEach(m => m.remove());
+    nearbyDriversLayer = [];
+    if (activeRide) return; // double-check: ride may have started while request was in flight
+    nearby.forEach(d => {
+      const icon = _vehicleIcons[d.vehicleType] || '🚗';
+      const marker = L.marker([d.lat, d.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="font-size:18px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7))">${icon}</div>`,
+          iconSize: [24, 24], iconAnchor: [12, 12]
+        }),
+        interactive: false,
+        zIndexOffset: -100
+      }).addTo(map);
+      nearbyDriversLayer.push(marker);
+    });
+  } catch (e) { /* silent — nearby drivers are cosmetic only */ }
+}
+
+function startNearbyDrivers() {
+  pollNearbyDrivers();
+  if (!nearbyPollInterval) nearbyPollInterval = setInterval(pollNearbyDrivers, 15000);
+}
+
+function stopNearbyDrivers() {
+  if (nearbyPollInterval) { clearInterval(nearbyPollInterval); nearbyPollInterval = null; }
+  nearbyDriversLayer.forEach(m => m.remove());
+  nearbyDriversLayer = [];
 }
 
 function createCircleIcon(cls) {
@@ -1316,6 +1360,7 @@ async function bookRide() {
 
 // ── Waiting Panel (post-booking, before driver selection) ──────────────────
 function showWaitingPanel(ride) {
+  stopNearbyDrivers(); // hide nearby markers once a ride is in progress
   document.getElementById('active-ride').style.display = 'block';
   document.getElementById('bottom-panel').style.display = 'none';
   document.getElementById('ar-waiting').style.display = 'block';
@@ -1474,6 +1519,7 @@ function endRide() {
   document.getElementById('map-hint').className = 'map-hint';
   document.getElementById('map-hint').textContent = 'Tap map or search a pickup location below';
   loadRideHistory();
+  setTimeout(startNearbyDrivers, 500); // restore nearby markers after ride ends
 }
 
 // ── Socket.io ─────────────────────────────────────────────────────────────

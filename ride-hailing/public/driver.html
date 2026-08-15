@@ -461,6 +461,10 @@ textarea.support-input{resize:vertical;min-height:85px}
     <span style="color:#2a2a3a">|</span>
     <span id="fee-status-text">—</span>
   </div>
+  <!-- Free Trial History Banner -->
+  <div id="trial-history-banner" style="display:none;background:#1a1200;border-bottom:1px solid #2a2000;padding:.35rem 1rem;font-size:.72rem;color:#f5c518;align-items:center;gap:.4rem">
+    <span>🎁</span><span></span>
+  </div>
 
   <!-- Pending Approval Card (shown when accountStatus === 'pending') -->
   <div id="pending-card" class="pending-card" style="display:none">
@@ -1167,12 +1171,17 @@ function connectSocket() {
     showToast('🎉 Your account has been approved! You can now go online.', 'success');
   });
 
-  // Admin granted a fee waiver — instantly unlock Accept button
-  socket.on('fee:waived', ({ paidUntilDate }) => {
-    if (paidUntilDate) user.paidUntilDate = paidUntilDate;
+  // Admin granted a fee waiver or free trial — instantly unlock Accept button
+  socket.on('fee:waived', ({ paidUntilDate, isFreeTrial, trialStartDate }) => {
+    if (paidUntilDate)             user.paidUntilDate  = paidUntilDate;
+    if (isFreeTrial !== undefined)  user.isFreeTrial    = isFreeTrial;
+    if (trialStartDate)            user.trialStartDate = trialStartDate;
     localStorage.setItem('rh_user', JSON.stringify(user));
     unlockAcceptButton();
-    showToast('✅ Daily fee waived by admin — ride acceptance is now active!', 'success');
+    const msg = isFreeTrial
+      ? '🎁 Free trial granted by admin — ride acceptance is now active!'
+      : '✅ Daily fee waived by admin — ride acceptance is now active!';
+    showToast(msg, 'success');
   });
 
   // Account suspended / balance too low
@@ -2099,22 +2108,38 @@ function checkDailyFee() {
   const paidUntil = user.paidUntilDate ? new Date(user.paidUntilDate) : null;
   dailyFeeDue     = !paidUntil || paidUntil < new Date();
 
-  // Show and update the fee info bar
-  const barEl    = document.getElementById('fee-info-bar');
-  const statusEl = document.getElementById('fee-status-text');
-  const rateEl   = document.getElementById('fee-rate-text');
+  // Update fee info bar
+  const barEl     = document.getElementById('fee-info-bar');
+  const statusEl  = document.getElementById('fee-status-text');
+  const rateEl    = document.getElementById('fee-rate-text');
   const vehicleEl = document.getElementById('fee-vehicle-text');
-  if (barEl)     barEl.style.display    = 'flex';
-  if (vehicleEl) vehicleEl.textContent  = user.vehicleType || 'Vehicle';
-  if (rateEl)    rateEl.textContent     = `Daily Fee: Rs ${feeRate}`;
+  if (barEl)     barEl.style.display   = 'flex';
+  if (vehicleEl) vehicleEl.textContent = user.vehicleType || 'Vehicle';
+  if (rateEl)    rateEl.textContent    = `Daily Fee: Rs ${feeRate}`;
   if (statusEl) {
     if (dailyFeeDue) {
       statusEl.textContent = '⚠ Fee unpaid — Accept disabled';
       statusEl.style.color = '#f59e0b';
+    } else if (user.isFreeTrial) {
+      const ds = paidUntil ? paidUntil.toLocaleDateString('en-PK', { day: '2-digit', month: 'short' }) : '';
+      statusEl.textContent = `🎁 Free Trial Active (Until ${ds})`;
+      statusEl.style.color = '#f5c518';
     } else {
       const ds = paidUntil ? paidUntil.toLocaleDateString('en-PK', { day: '2-digit', month: 'short' }) : '';
       statusEl.textContent = `✓ Paid till ${ds}`;
       statusEl.style.color = '#22c55e';
+    }
+  }
+  // Trial history banner
+  const trialBannerEl = document.getElementById('trial-history-banner');
+  if (trialBannerEl) {
+    if (user.isFreeTrial && user.trialStartDate && paidUntil && !dailyFeeDue) {
+      const startDs = new Date(user.trialStartDate).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
+      const endDs   = paidUntil.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' });
+      trialBannerEl.textContent = `Free Trial Granted: ${startDs} to ${endDs}`;
+      trialBannerEl.style.display = 'flex';
+    } else {
+      trialBannerEl.style.display = 'none';
     }
   }
 }

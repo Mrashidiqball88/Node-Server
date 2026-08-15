@@ -139,7 +139,9 @@ const userSchema = new mongoose.Schema({
   // Daily platform fee tracking
   lastDailyFeePaidAt: { type: Date,   default: null },
   dailyFeeAmount:     { type: Number, default: 200  },
-  paidUntilDate:      { type: Date,   default: null },   // set when daily fee paid or admin grants waiver
+  paidUntilDate:      { type: Date,    default: null },   // set when daily fee paid or admin grants waiver
+  isFreeTrial:        { type: Boolean, default: false },  // true when paidUntilDate was set by admin trial grant
+  trialStartDate:     { type: Date,    default: null },   // when the free trial started
   // Driver verification documents (URL strings)
   profilePhoto:    { type: String, default: '' },
   cnicFront:       { type: String, default: '' },
@@ -448,7 +450,9 @@ app.post('/api/auth/login', async (req, res) => {
               lastDailyFeePaidAt: user.lastDailyFeePaidAt || null,
               dailyFeeAmount: user.dailyFeeAmount || 200,
               paidUntilDate:  user.paidUntilDate  || null,
-              dailyFeeRate:   DAILY_FEE_RATES[user.vehicleType] || 220 }
+              dailyFeeRate:   DAILY_FEE_RATES[user.vehicleType] || 220,
+              isFreeTrial:    user.isFreeTrial    || false,
+              trialStartDate: user.trialStartDate || null }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1711,9 +1715,15 @@ const TRIAL_AMOUNTS = { 'Bike': 2000, 'Rickshaw': 3000, 'Car Mini': 4500, 'Car A
 
 app.post('/api/admin/drivers/grant-trial', adminJwt, requirePerm('manageWallets'), async (req, res) => {
   try {
-    const { driverIds } = req.body; // array of user IDs
+    const { driverIds, days } = req.body;
     if (!Array.isArray(driverIds) || !driverIds.length)
       return res.status(400).json({ error: 'driverIds array required' });
+    const trialDays = Math.max(1, Math.min(365, parseInt(days) || 30));
+
+    const trialStartDate = new Date();
+    const paidUntilDate  = new Date();
+    paidUntilDate.setDate(paidUntilDate.getDate() + trialDays);
+    paidUntilDate.setUTCHours(23, 59, 59, 999);
 
     const drivers = await User.find({ _id: { $in: driverIds }, role: 'driver' }).select('vehicleType name');
     const results = [];
@@ -1721,13 +1731,20 @@ app.post('/api/admin/drivers/grant-trial', adminJwt, requirePerm('manageWallets'
       const amount = TRIAL_AMOUNTS[driver.vehicleType] || 4500;
       await Wallet.findOneAndUpdate(
         { user: driver._id },
-        { $inc: { balance: amount, bonusWallet: amount },   // bonus credited to bonusWallet only (not realCashWallet)
-          $push: { transactions: { amount, type: 'credit', description: '1-Month Promotional Bonus Credit' } } },
+        { $inc: { balance: amount, bonusWallet: amount },
+          $push: { transactions: { amount, type: 'credit', description: `${trialDays}-Day Free Trial Bonus Credit` } } },
         { upsert: true, new: true }
       );
+      await User.updateOne({ _id: driver._id }, { paidUntilDate, isFreeTrial: true, trialStartDate });
+      // Notify driver via socket instantly
+      io.to(`user:${driver._id}`).emit('fee:waived', {
+        paidUntilDate:  paidUntilDate.toISOString(),
+        isFreeTrial:    true,
+        trialStartDate: trialStartDate.toISOString()
+      });
       results.push({ id: driver._id, name: driver.name, amount });
     }
-    res.json({ success: true, credited: results.length, results });
+    res.json({ success: true, credited: results.length, results, trialDays, paidUntilDate });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1792,6 +1809,28 @@ app.post('/api/admin/daily-fee-compliance/remind', adminJwt, requirePerm('manage
       }
     }));
     res.json({ success: true, sent, total: subs.length, drivers: driverIds.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/drivers/nearby?lat=&lng= — online drivers within 5 km for customer map visualization
+app.get('/api/drivers/nearby', authMiddleware, async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat and lng required' });
+    function haversineKm(la1, ln1, la2, ln2) {
+      const R = 6371, dLat = (la2-la1)*Math.PI/180, dLng = (ln2-ln1)*Math.PI/180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLng/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+    const drivers = await User.find({
+      role: 'driver', isOnline: true, accountStatus: 'active',
+      'currentLocation.lat': { $ne: 0 }, 'currentLocation.lng': { $ne: 0 }
+    }).select('vehicleType currentLocation').lean();
+    const nearby = drivers
+      .filter(d => haversineKm(lat, lng, d.currentLocation.lat, d.currentLocation.lng) <= 5)
+      .map(d => ({ vehicleType: d.vehicleType, lat: d.currentLocation.lat, lng: d.currentLocation.lng }));
+    res.json(nearby);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

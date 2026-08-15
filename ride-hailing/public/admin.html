@@ -330,7 +330,7 @@ input[type=date]:focus{border-color:#f5c518}
               <div class="ftab" onclick="loadDrivers('suspended');setFTab(this)">Suspended</div>
               <div class="ftab" onclick="loadDrivers('blocked');setFTab(this)">Blocked</div>
             </div>
-            <button id="bulk-trial-btn" class="btn btn-yellow" onclick="grantBulkTrial()" disabled>🎁 Grant 1-Month Trial</button>
+            <button id="bulk-trial-btn" class="btn btn-yellow" onclick="grantBulkTrial()" disabled>🎁 Grant Free Trial</button>
             <input type="date" id="waiver-date-input" title="Grant Fee Paid Until this date" style="background:#06060e;border:1px solid #1e1e2e;border-radius:8px;padding:.35rem .65rem;color:#94a3b8;font-size:.78rem;outline:none;cursor:pointer">
             <button id="waiver-btn" class="btn btn-green" onclick="grantFeeWaiver()" disabled>📅 Grant Fee Paid Until</button>
             <button class="btn-refresh" onclick="loadDrivers(currentDriverStatus)">↻</button>
@@ -1058,9 +1058,15 @@ async function loadDrivers(status = 'all') {
       const dailyRate  = FEE_RATES[d.vehicleType] || 220;
       const paidUntil  = d.paidUntilDate ? new Date(d.paidUntilDate) : null;
       const feePaid    = paidUntil && paidUntil > new Date();
-      const feeCell    = feePaid
-        ? `<div style="font-size:.75rem;font-weight:700;color:#f5c518">Rs ${dailyRate}</div><div style="font-size:.65rem;color:#22c55e">✓ till ${paidUntil.toLocaleDateString('en-PK',{day:'2-digit',month:'short'})}</div>`
-        : `<div style="font-size:.75rem;font-weight:700;color:#f5c518">Rs ${dailyRate}</div><div style="font-size:.65rem;color:#f59e0b">⚠ unpaid</div>`;
+      const ds         = feePaid ? paidUntil.toLocaleDateString('en-PK', { day:'2-digit', month:'short' }) : '';
+      let feeCell;
+      if (feePaid && d.isFreeTrial) {
+        feeCell = `<div style="font-size:.73rem"><span style="color:#f5c518;font-weight:700">🎁 Free Trial Active</span><br><span style="color:#64748b;font-size:.65rem">(Until ${ds})</span></div>`;
+      } else if (feePaid) {
+        feeCell = `<div style="font-size:.73rem"><span style="color:#22c55e;font-weight:700">✅ Fee Paid</span><br><span style="color:#64748b;font-size:.65rem">(Until ${ds})</span></div>`;
+      } else {
+        feeCell = `<div style="font-size:.73rem"><span style="color:#f59e0b;font-weight:700">⚠️ Unpaid</span><br><span style="color:#64748b;font-size:.65rem">(Rs ${dailyRate}/day)</span></div>`;
+      }
       return `<tr>
         <td><input type="checkbox" class="driver-chk" value="${d._id}" style="cursor:pointer" onchange="toggleDriverSelect('${d._id}',this.checked)"></td>
         <td><div style="display:flex;align-items:center">${avatarHtml}<div><div style="font-weight:700;color:#e2e8f0">${d.name}</div></div></div></td>
@@ -1073,7 +1079,7 @@ async function loadDrivers(status = 'all') {
         <td><div style="display:flex;gap:.3rem;flex-wrap:wrap">
           <button class="btn btn-blue"   onclick="viewUser('${d._id}','driver')">👁</button>
           <button class="btn btn-gray"   onclick="viewDocs('${d._id}')">📄</button>
-          ${(isSuperAdmin||adminPerms.manageWallets) ? `<button class="btn btn-yellow" onclick="grantTrial('${d._id}')" title="Grant 1-Month Free Trial">🎁</button>` : ''}
+          ${(isSuperAdmin||adminPerms.manageWallets) ? `<button class="btn btn-yellow" onclick="grantTrial('${d._id}')" title="Grant Free Trial">🎁</button>` : ''}
           ${d.accountStatus==='pending'   && (isSuperAdmin||adminPerms.approveDrivers) ? `<button class="btn btn-green"  onclick="userAction('${d._id}','approve','driver')">✓</button>` : ''}
           ${d.accountStatus==='active'    && (isSuperAdmin||adminPerms.blockDrivers)   ? `<button class="btn btn-yellow" onclick="userAction('${d._id}','suspend','driver')">⏸</button>
             <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔</button>` : ''}
@@ -1654,7 +1660,7 @@ function updateBulkGrantBtn() {
   const n = selectedDriverIds.size;
   const btn = document.getElementById('bulk-trial-btn');
   if (btn) {
-    btn.textContent = n ? `🎁 Grant 1-Month Trial (${n} selected)` : '🎁 Grant 1-Month Trial';
+    btn.textContent = n ? `🎁 Grant Free Trial (${n} selected)` : '🎁 Grant Free Trial';
     btn.disabled = n === 0;
   }
   const wBtn = document.getElementById('waiver-btn');
@@ -1664,23 +1670,51 @@ function updateBulkGrantBtn() {
   }
 }
 
-async function grantBulkTrial() {
-  if (!selectedDriverIds.size) return showToast('Select at least one driver', 'error');
-  if (!confirm(`Grant 1-month free trial credit to ${selectedDriverIds.size} driver(s)?`)) return;
+let _trialDriverIds = [];
+
+function openTrialModal(driverIds) {
+  _trialDriverIds = driverIds;
+  const desc = document.getElementById('trial-modal-desc');
+  if (desc) desc.textContent = driverIds.length === 1
+    ? 'Grant a free trial to 1 selected driver.'
+    : `Grant a free trial to ${driverIds.length} selected drivers.`;
+  const inp = document.getElementById('trial-days-input');
+  if (inp) inp.value = '30';
+  document.getElementById('trial-modal-err').textContent = '';
+  const btn = document.getElementById('trial-confirm-btn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Grant Trial'; }
+  document.getElementById('trial-modal').style.display = 'flex';
+}
+function closeTrialModal() {
+  document.getElementById('trial-modal').style.display = 'none';
+  _trialDriverIds = [];
+}
+async function submitTrialGrant() {
+  const days  = parseInt(document.getElementById('trial-days-input').value);
+  const errEl = document.getElementById('trial-modal-err');
+  if (!days || days < 1 || days > 365) { errEl.textContent = 'Enter a valid number of days (1–365)'; return; }
+  errEl.textContent = '';
+  const btn = document.getElementById('trial-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Granting…';
   try {
-    const res = await api('/api/admin/drivers/grant-trial', 'POST', { driverIds: [...selectedDriverIds] });
-    showToast(`✓ Credited ${res.credited} driver(s)`, 'success');
+    const res = await api('/api/admin/drivers/grant-trial', 'POST', { driverIds: _trialDriverIds, days });
+    showToast(`✓ ${res.credited} driver(s) granted ${days}-day free trial`, 'success');
+    closeTrialModal();
     selectedDriverIds.clear();
     loadDrivers(currentDriverStatus);
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) {
+    errEl.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Grant Trial';
+  }
 }
 
-async function grantTrial(driverId) {
-  if (!confirm('Grant 1-month free trial credit to this driver?')) return;
-  try {
-    const res = await api('/api/admin/drivers/grant-trial', 'POST', { driverIds: [driverId] });
-    showToast(`✓ ${res.results[0]?.name} credited Rs ${res.results[0]?.amount?.toLocaleString()}`, 'success');
-  } catch (e) { showToast(e.message, 'error'); }
+function grantBulkTrial() {
+  if (!selectedDriverIds.size) return showToast('Select at least one driver', 'error');
+  openTrialModal([...selectedDriverIds]);
+}
+
+function grantTrial(driverId) {
+  openTrialModal([driverId]);
 }
 
 async function grantFeeWaiver() {
@@ -1927,5 +1961,20 @@ if (adminToken) {
   bootAdmin();
 } else document.getElementById('auth-overlay').style.display = 'flex';
 </script>
+<!-- ── Grant Free Trial Modal ─────────────────────────────────────────────── -->
+<div id="trial-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:3100;align-items:center;justify-content:center">
+  <div style="background:#0d0d1e;border:1px solid #2a2a4a;border-radius:14px;padding:1.5rem;max-width:340px;width:90%;margin:auto">
+    <h3 style="color:#f5c518;margin:0 0 .6rem;font-size:1rem">🎁 Grant Free Trial</h3>
+    <p id="trial-modal-desc" style="color:#94a3b8;font-size:.82rem;margin:0 0 1rem"></p>
+    <label style="color:#64748b;font-size:.72rem;font-weight:600;display:block;margin-bottom:.35rem">NUMBER OF TRIAL DAYS</label>
+    <input type="number" id="trial-days-input" min="1" max="365" value="30" placeholder="e.g. 30"
+      style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #2a2a4a;background:#06060e;color:#fff;font-size:.95rem;box-sizing:border-box;margin-bottom:.4rem">
+    <p id="trial-modal-err" style="color:#ef4444;font-size:.77rem;min-height:1em;margin-bottom:.65rem"></p>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="closeTrialModal()" style="flex:1;padding:.7rem;border-radius:8px;border:1px solid #2a2a4a;background:#0d0d1e;color:#94a3b8;cursor:pointer;font-size:.85rem">Cancel</button>
+      <button id="trial-confirm-btn" onclick="submitTrialGrant()" style="flex:1;padding:.7rem;border-radius:8px;border:none;background:#f5c518;color:#000;font-weight:700;cursor:pointer;font-size:.85rem">Grant Trial</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
