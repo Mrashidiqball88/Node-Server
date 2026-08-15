@@ -628,7 +628,8 @@ textarea.support-input{resize:vertical;min-height:85px}
     <div class="rr-counter-label">Counter Offer (optional — leave blank to accept as-is)</div>
     <div class="rr-counter-row">
       <span style="color:#666;font-size:.85rem;font-weight:600">Rs</span>
-      <input type="number" id="rr-counter-input" class="rr-counter-input" placeholder="Your price…" min="1">
+      <input type="number" id="rr-counter-input" class="rr-counter-input" placeholder="Your price…" min="1"
+             onfocus="pauseRideTimer()" oninput="pauseRideTimer()">
     </div>
   </div>
 
@@ -1479,6 +1480,14 @@ async function acceptRide() {
   }
 }
 
+// Pause the 25-second countdown immediately (called when driver types in counter field)
+function pauseRideTimer() {
+  if (!requestTimer) return;   // already paused or not started
+  clearInterval(requestTimer);
+  requestTimer = null;
+  document.getElementById('rr-timer').textContent = '⏸';
+}
+
 // Send a counter-offer at a different price
 async function sendCounter() {
   if (!pendingRide) return;
@@ -1486,15 +1495,19 @@ async function sendCounter() {
   const price = parseFloat(counterInput.value);
   if (!price || price < 1) return showToast('Enter a counter price', 'error');
   const rideId = pendingRide.id;
+
+  // Freeze the timer BEFORE the network call — prevents expiry mid-request
+  pauseRideTimer();
+
   try {
     await apiCall(`/api/rides/${rideId}/counter`, 'PATCH', { price, type: 'counter' });
     socket.emit('ride:join', rideId);
     sentOffer = { rideId };
     pendingRide = null;
-    clearInterval(requestTimer);
-    document.getElementById('rr-actions').style.display = 'none';
+    stopRideAlert();
+    document.getElementById('rr-actions').style.display   = 'none';
     document.getElementById('rr-offer-sent').style.display = 'block';
-    document.getElementById('rr-offer-sent').textContent = `⇄ Counter Rs ${price.toLocaleString()} sent — waiting…`;
+    document.getElementById('rr-offer-sent').textContent  = `⇄ Counter Rs ${price.toLocaleString()} sent — waiting…`;
     document.getElementById('rr-timer').textContent = '⏳';
     showToast(`Counter offer Rs ${price.toLocaleString()} sent!`, 'success');
   } catch (e) {
@@ -1572,10 +1585,22 @@ async function cancelActiveRide() {
 }
 
 function endActiveRide() {
+  const finishedRideId = activeRide?._id;
   activeRide = null;
+
   document.getElementById('active-panel').style.display = 'none';
   document.getElementById('info-panel').style.display   = 'block';
   clearRideMap();
+
+  // Leave the completed ride's socket room so stale events don't bleed through
+  if (finishedRideId && socket) socket.emit('ride:leave', String(finishedRideId));
+
+  // Map tiles go blank when the container was hidden — invalidate after reflow
+  setTimeout(() => map?.invalidateSize(), 150);
+  setTimeout(() => map?.invalidateSize(), 600);
+
+  // Re-check support-ticket badge so the bell reflects the real unread count
+  checkUnreadDriverTickets();
 }
 
 // ── Bottom Tab Navigation ──────────────────────────────────────────────────
