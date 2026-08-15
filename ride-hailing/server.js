@@ -468,6 +468,21 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'No account found with this phone number or email' });
     if (!(await bcrypt.compare(password, user.password)))
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+    // Back-fill paidUntilDate for drivers who paid under the old system
+    // (lastDailyFeePaidAt set, paidUntilDate still null). Run silently so
+    // no previously-paid driver is locked out after the daily-fee update.
+    if (user.role === 'driver' && !user.paidUntilDate && user.lastDailyFeePaidAt) {
+      const todayUTCMidnight = new Date();
+      todayUTCMidnight.setUTCHours(0, 0, 0, 0);
+      if (user.lastDailyFeePaidAt >= todayUTCMidnight) {
+        // Paid today under the old system — grant access through end of today UTC
+        const endOfTodayUTC = new Date(todayUTCMidnight);
+        endOfTodayUTC.setUTCHours(23, 59, 59, 999);
+        await User.updateOne({ _id: user._id }, { paidUntilDate: endOfTodayUTC });
+        user.paidUntilDate = endOfTodayUTC;
+      }
+    }
+
     // Generate a new single-device session token and overwrite any previous one
     const sessionToken = crypto.randomBytes(32).toString('hex');
     await User.updateOne({ _id: user._id }, { activeSessionToken: sessionToken });
