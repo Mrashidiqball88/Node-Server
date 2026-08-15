@@ -534,17 +534,12 @@ textarea.support-input{resize:vertical;min-height:85px}
     </div>
     <!-- Wallet & Subscription Summary -->
     <div class="wallet-summary-wrap" id="wallet-summary-card">
-      <div class="wsum-hdr">💳 Wallet &amp; Subscription Summary</div>
+      <div class="wsum-hdr">💳 Wallet Summary</div>
       <div class="wsum-cards">
         <div class="wsum-card balance-card">
           <div class="wsum-icon">💰</div>
           <div class="wsum-val" id="wsum-balance">—</div>
           <div class="wsum-lbl">Total Balance (Rs)</div>
-        </div>
-        <div class="wsum-card sub-card">
-          <div class="wsum-icon">📅</div>
-          <div class="wsum-val" id="wsum-sub">—</div>
-          <div class="wsum-lbl">Monthly Sub Fee (Rs)</div>
         </div>
         <div class="wsum-card bonus-card">
           <div class="wsum-icon">🎁</div>
@@ -1720,7 +1715,6 @@ async function loadWalletSummary() {
     const total     = realCash + bonusCred;
     document.getElementById('wsum-balance').textContent = total.toLocaleString();
     document.getElementById('wsum-balance').style.color = total < 0 ? '#ef4444' : '#4caf50';
-    document.getElementById('wsum-sub').textContent   = (data.monthlyFee || 0).toLocaleString();
     document.getElementById('wsum-bonus').textContent = bonusCred.toLocaleString();
     // Breakdown rows
     document.getElementById('wsum-real-cash').textContent    = 'Rs ' + realCash.toLocaleString();
@@ -2181,9 +2175,9 @@ function checkDailyFee() {
       statusEl.textContent = '⚠ Fee unpaid — Accept disabled';
       statusEl.style.color = '#f59e0b';
     } else if (user.isFreeTrial) {
-      const ds = paidUntil ? paidUntil.toLocaleDateString('en-PK', { day: '2-digit', month: 'short' }) : '';
-      statusEl.textContent = `🎁 Free Trial Active (Until ${ds})`;
-      statusEl.style.color = '#f5c518';
+      const ds = paidUntil ? paidUntil.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+      statusEl.textContent = `✅ Paid by server till ${ds}`;
+      statusEl.style.color = '#22c55e';
     } else {
       const ds = paidUntil ? paidUntil.toLocaleDateString('en-PK', { day: '2-digit', month: 'short' }) : '';
       statusEl.textContent = `✓ Paid till ${ds}`;

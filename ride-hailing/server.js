@@ -1043,8 +1043,22 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Only drivers can submit payments' });
     }
     const { trxId, amount, paymentType } = req.body;
-    if (!trxId || !trxId.trim()) {
+    const cleanTrx = (trxId || '').trim();
+
+    // ── Format validation ──────────────────────────────────────────────────
+    if (!cleanTrx) {
       return res.status(400).json({ error: 'TRX ID is required' });
+    }
+    if (cleanTrx.length < 8) {
+      return res.status(400).json({ error: 'TRX ID must be at least 8 characters' });
+    }
+    // Allow letters, digits, hyphens and underscores; reject anything else
+    if (!/^[A-Za-z0-9\-_]+$/.test(cleanTrx)) {
+      return res.status(400).json({ error: 'TRX ID may only contain letters, digits, hyphens and underscores' });
+    }
+    // Reject obviously fake IDs (all identical characters, e.g. "111111111" or "xxxxxxxxx")
+    if (/^(.)\1+$/.test(cleanTrx)) {
+      return res.status(400).json({ error: 'Invalid TRX ID — please enter the real transaction reference' });
     }
     if (!amount || Number(amount) <= 0) {
       return res.status(400).json({ error: 'A valid amount is required' });
@@ -1052,6 +1066,12 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
 
     const driver = await User.findById(req.user.id).select('vehicleType');
     if (!driver) return res.status(404).json({ error: 'Driver not found' });
+
+    // ── Global TRX ID uniqueness (prevents reuse across drivers) ───────────
+    const trxDuplicate = await Payment.findOne({ trxId: cleanTrx });
+    if (trxDuplicate) {
+      return res.status(409).json({ error: 'This Transaction ID has already been used. If you believe this is an error, contact admin.' });
+    }
 
     const dateStr = todayUTC();
     // Uniqueness: one submission per driver per day
@@ -1063,7 +1083,7 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
     const validTypes = ['jazzcash', 'easypaisa', 'bank'];
     const payment = await Payment.create({
       driver:          req.user.id,
-      trxId:           trxId.trim(),
+      trxId:           cleanTrx,
       amount:          Number(amount),
       paymentType:     validTypes.includes(paymentType) ? paymentType : 'jazzcash',
       vehicleCategory: driver.vehicleType || 'Car Mini',
@@ -1686,13 +1706,12 @@ app.patch('/api/support/my/read', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/wallet/summary — driver's wallet balance, monthly fee, bonus credits, ledger
+// GET /api/wallet/summary — driver's wallet balance, bonus credits, ledger
 app.get('/api/wallet/summary', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'driver') return res.status(403).json({ error: 'Drivers only' });
     const driver = await User.findById(req.user.id).select('vehicleType');
     const vehicleType = driver?.vehicleType || 'Car Mini';
-    const monthlyFee  = TRIAL_AMOUNTS[vehicleType] || 4500;
 
     const wallet = await Wallet.findOne({ user: req.user.id });
     const balance      = wallet?.balance || 0;
@@ -1716,7 +1735,7 @@ app.get('/api/wallet/summary', authMiddleware, async (req, res) => {
 
     const realCashWallet = wallet?.realCashWallet || 0;
     const bonusWalletAmt = wallet?.bonusWallet    || 0;
-    res.json({ balance, monthlyFee, totalBonus, vehicleType, ledger, todayPayment: todayPayment || null,
+    res.json({ balance, totalBonus, vehicleType, ledger, todayPayment: todayPayment || null,
                realCashWallet, bonusWallet: bonusWalletAmt });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
