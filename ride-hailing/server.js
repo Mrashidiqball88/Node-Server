@@ -615,7 +615,7 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
       mobileAccount: mobileAccount || ''
     });
 
-    // Broadcast to all online drivers via Socket.io
+    // Broadcast to matching-vehicle drivers only via Socket.io
     const ridePayload = {
       id:               ride._id,
       pickupLocation:   ride.pickupLocation,
@@ -628,7 +628,8 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
       notes:            ride.notes,
       createdAt:        ride.createdAt
     };
-    io.to('drivers-online').emit('ride:new', ridePayload);
+    const vehicleRoom = `drivers:${ride.vehicleType || 'Car Mini'}`;
+    io.to(vehicleRoom).emit('ride:new', ridePayload);
 
     // Also push a Web Push notification to subscribed active drivers (handles closed tabs)
     if (global._vapidPublicKey && dbConnected) {
@@ -648,8 +649,8 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
         ]
       };
       // Fire-and-forget — don't block the HTTP response.
-      // Only active drivers with non-negative wallet balance receive the push.
-      User.find({ role: 'driver', accountStatus: 'active' }).select('_id').lean()
+      // Only active drivers of the same vehicle category with non-negative wallet balance receive the push.
+      User.find({ role: 'driver', accountStatus: 'active', vehicleType: ride.vehicleType }).select('_id').lean()
         .then(async activeDrivers => {
           const activeIds = activeDrivers.map(d => String(d._id));
           // Filter out drivers with insufficient balance
@@ -752,7 +753,7 @@ app.patch('/api/rides/:id/accept', authMiddleware, async (req, res) => {
         profilePhoto: driverUser.profilePhoto || ''
       }
     });
-    io.to('drivers-online').emit('ride:taken', { rideId: ride._id });
+    io.to(`drivers:${ride.vehicleType || 'Car Mini'}`).emit('ride:taken', { rideId: ride._id });
 
     res.json(ride);
   } catch (err) {
@@ -915,7 +916,7 @@ app.patch('/api/rides/:id/accept-driver', authMiddleware, async (req, res) => {
         profilePhoto: driverUser.profilePhoto || ''
       }
     });
-    io.to('drivers-online').emit('ride:taken', { rideId: ride._id });
+    io.to(`drivers:${ride.vehicleType || 'Car Mini'}`).emit('ride:taken', { rideId: ride._id });
 
     res.json(ride);
   } catch (err) {
@@ -936,8 +937,8 @@ app.patch('/api/rides/:id/update-fare', authMiddleware, async (req, res) => {
     );
     if (!ride) return res.status(404).json({ error: 'Ride not found or already accepted' });
 
-    // Re-broadcast updated fare to all online drivers
-    io.to('drivers-online').emit('ride:fare-updated', {
+    // Re-broadcast updated fare only to drivers of the same vehicle category
+    io.to(`drivers:${ride.vehicleType || 'Car Mini'}`).emit('ride:fare-updated', {
       id:   ride._id,
       fare: ride.fare
     });
@@ -2139,13 +2140,16 @@ io.on('connection', (socket) => {
   // here without requiring the client to manually re-send status events first.
   if (role === 'driver') {
     Promise.all([
-      User.findById(id).select('isOnline accountStatus').lean().catch(() => null),
+      User.findById(id).select('isOnline accountStatus vehicleType').lean().catch(() => null),
       Ride.findOne({ driver: id, status: { $in: ['accepted', 'arrived', 'in-progress'] } })
           .select('_id').lean().catch(() => null)
     ]).then(([driver, activeRide]) => {
-      // Restore online room — only if DB says online and account is active
+      // Cache vehicle type on socket for fast room management
+      if (driver?.vehicleType) socket.vehicleType = driver.vehicleType;
+      // Restore online rooms — only if DB says online and account is active
       if (driver?.isOnline && driver.accountStatus === 'active') {
         socket.join('drivers-online');
+        socket.join(`drivers:${driver.vehicleType || 'Car Mini'}`);
       }
       // Re-join the active ride room so location updates reach the passenger
       if (activeRide) {
@@ -2173,7 +2177,7 @@ io.on('connection', (socket) => {
     if (role !== 'driver') return;
     if (isOnline) {
       const [driver, wallet] = await Promise.all([
-        User.findById(id).select('accountStatus').catch(() => null),
+        User.findById(id).select('accountStatus vehicleType').catch(() => null),
         Wallet.findOne({ user: id }).select('balance').catch(() => null)
       ]);
       if (driver?.accountStatus === 'pending') {
@@ -2190,10 +2194,13 @@ io.on('connection', (socket) => {
         });
         return;
       }
+      // Cache vehicle type on socket for room management
+      if (driver?.vehicleType) socket.vehicleType = driver.vehicleType;
     }
     await User.updateOne({ _id: id }, { isOnline }).catch(() => {});
-    if (isOnline) socket.join('drivers-online');
-    else          socket.leave('drivers-online');
+    const vRoom = `drivers:${socket.vehicleType || 'Car Mini'}`;
+    if (isOnline) { socket.join('drivers-online'); socket.join(vRoom); }
+    else          { socket.leave('drivers-online'); socket.leave(vRoom); }
   });
 
   // Share live location (customer)

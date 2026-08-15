@@ -1453,29 +1453,29 @@ function rejectRide() {
   showToast('Ride rejected', 'info');
 }
 
-// Accept at the customer's offered fare — direct acceptance, no re-confirmation needed
+// Send an accept-type offer at the customer's listed fare.
+// The customer sees it in their offers list and confirms the booking by choosing us.
 async function acceptRide() {
   if (!pendingRide) return;
-  const rideId = pendingRide.id;
+  const rideId  = pendingRide.id;
+  const offeredFare = pendingRide.fare;
   try {
+    await apiCall(`/api/rides/${rideId}/counter`, 'PATCH', { price: offeredFare, type: 'accept' });
+    socket.emit('ride:join', rideId);
+    sentOffer = { rideId };
+    pendingRide = null;
     clearInterval(requestTimer);
     stopRideAlert();
-    pendingRide = null;
-    document.getElementById('ride-request').style.display = 'none';
+    // Hide action buttons, show offer-sent confirmation
+    document.getElementById('rr-actions').style.display   = 'none';
+    document.getElementById('rr-offer-sent').style.display = 'block';
+    document.getElementById('rr-offer-sent').textContent  =
+      `✓ Offer sent at Rs ${(offeredFare || 0).toLocaleString()} — waiting for customer…`;
+    document.getElementById('rr-timer').textContent = '⏳';
     document.getElementById('rr-counter-input').value = '';
-    // Call the direct accept endpoint — server immediately sets status → accepted
-    // and emits ride:accepted to the ride room + customer
-    await apiCall(`/api/rides/${rideId}/accept`, 'PATCH');
-    socket.emit('ride:join', rideId);
-    // Fetch the full ride and go straight to active panel (no customer re-confirmation)
-    const ride = await apiCall(`/api/rides/${rideId}`);
-    activeRide = ride;
-    showActivePanel(ride);
-    showRideOnMap(ride);
-    showToast('Ride accepted! Head to pickup 🚗', 'success');
+    showToast('Offer sent! Waiting for customer to choose.', 'success');
   } catch (e) {
-    showToast(e.message, 'error');
-    pendingRide = null;
+    showToast(e.message || 'Could not send offer — try again', 'error');
   }
 }
 
