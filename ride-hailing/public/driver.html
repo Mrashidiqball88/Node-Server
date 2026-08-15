@@ -139,6 +139,13 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 /* ── Payments Panel ── */
 #payments-panel{display:none;background:#0d1117;flex:1;overflow-y:auto;padding:1rem;flex-shrink:0;max-height:45vh}
 
+/* ── Daily Fee Banner ── */
+#daily-fee-banner{background:#2a1800;border:2px solid #f5c518;border-radius:12px;padding:.85rem 1rem;margin-bottom:.9rem;display:none;align-items:flex-start;gap:.6rem}
+.dfb-icon{font-size:1.2rem;flex-shrink:0;line-height:1}
+.dfb-body{flex:1}
+.dfb-title{font-size:.88rem;font-weight:700;color:#f5c518;margin-bottom:.2rem}
+.dfb-msg{font-size:.8rem;color:#aaa;line-height:1.4}
+
 /* ── Wallet & Subscription Summary ── */
 .wallet-summary-wrap{background:linear-gradient(135deg,#0a0f1a,#06060e);border:1px solid #1a2a3a;border-radius:14px;padding:.85rem;margin-bottom:1rem}
 .wsum-hdr{font-size:.7rem;color:#475569;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.65rem}
@@ -517,6 +524,14 @@ textarea.support-input{resize:vertical;min-height:85px}
 
   <!-- Payments Panel -->
   <div id="payments-panel">
+    <!-- Daily Fee Due Banner -->
+    <div id="daily-fee-banner">
+      <span class="dfb-icon">⚠️</span>
+      <div class="dfb-body">
+        <div class="dfb-title">Daily Fee Unpaid — Accept Button Locked</div>
+        <div class="dfb-msg">Pay <strong id="daily-fee-banner-amount" style="color:#f5c518">Rs 220</strong> to unlock the Accept button. Enter your TRX ID in the form below.</div>
+      </div>
+    </div>
     <!-- Wallet & Subscription Summary -->
     <div class="wallet-summary-wrap" id="wallet-summary-card">
       <div class="wsum-hdr">💳 Wallet &amp; Subscription Summary</div>
@@ -1325,16 +1340,18 @@ function showRideRequest(ride) {
   const acceptBtn = document.querySelector('.btn-accept');
   if (acceptBtn) {
     if (dailyFeeDue) {
-      acceptBtn.disabled = true;
       const _rate = user?.dailyFeeRate || DAILY_FEE_RATES[user?.vehicleType] || 220;
+      acceptBtn.disabled = false; // keep clickable so tapping redirects to Payments
       acceptBtn.textContent = `Pay Rs ${_rate} Daily Fee to Accept`;
-      acceptBtn.style.opacity = '0.5';
-      acceptBtn.style.cursor  = 'not-allowed';
+      acceptBtn.style.opacity = '0.6';
+      acceptBtn.style.cursor  = 'pointer';
+      acceptBtn.onclick = (e) => { e.stopPropagation(); goToPayFee(_rate); };
     } else {
       acceptBtn.disabled = false;
       acceptBtn.textContent = '✓ Accept';
       acceptBtn.style.opacity = '';
       acceptBtn.style.cursor  = '';
+      acceptBtn.onclick = () => acceptRide();
     }
   }
 }
@@ -1566,6 +1583,7 @@ function switchBottomTab(tab) {
     document.getElementById('active-panel').style.display  = 'none';
     document.getElementById('payments-panel').style.display = 'block';
     loadPayments();
+    updateDailyFeeBanner();
   }
   // Repaint map tiles after panel reflow (50 ms is too short for iOS)
   setTimeout(() => map?.invalidateSize(), 150);
@@ -2154,7 +2172,47 @@ function unlockAcceptButton() {
     acceptBtn.textContent   = '✓ Accept';
     acceptBtn.style.opacity = '';
     acceptBtn.style.cursor  = '';
+    acceptBtn.onclick = () => acceptRide();
   }
+  // Dismiss the daily fee banner
+  const banner = document.getElementById('daily-fee-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+// Show/hide the daily fee banner inside the Payments panel
+function updateDailyFeeBanner() {
+  const banner    = document.getElementById('daily-fee-banner');
+  const amountEl  = document.getElementById('daily-fee-banner-amount');
+  if (!banner) return;
+  if (dailyFeeDue) {
+    const feeRate = user?.dailyFeeRate || DAILY_FEE_RATES[user?.vehicleType] || 220;
+    if (amountEl) amountEl.textContent = `Rs ${feeRate}`;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+// Navigate to the Payments tab and scroll the TRX form into view
+function goToPayFee(rate) {
+  // Dismiss the ride-request overlay so the Payments panel is fully visible
+  hideRideRequest();
+
+  switchBottomTab('payments');
+  const feeRate = rate || user?.dailyFeeRate || DAILY_FEE_RATES[user?.vehicleType] || 220;
+  const banner   = document.getElementById('daily-fee-banner');
+  const amountEl = document.getElementById('daily-fee-banner-amount');
+  if (banner)   banner.style.display = 'flex';
+  if (amountEl) amountEl.textContent = `Rs ${feeRate}`;
+  // Scroll TRX form into view then focus the TRX input
+  setTimeout(() => {
+    const trxSection = document.getElementById('trx-form-section');
+    if (trxSection) trxSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      const trxInput = document.getElementById('trx-id-input');
+      if (trxInput) trxInput.focus();
+    }, 400);
+  }, 200);
 }
 
 // ── Profile Update Helpers ─────────────────────────────────────────────────
