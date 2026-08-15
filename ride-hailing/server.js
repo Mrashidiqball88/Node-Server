@@ -2359,6 +2359,42 @@ async function runDailyDeduction() {
         }
       } catch (notifyErr) { console.warn('Low-balance notify error:', notifyErr.message); }
     }
+
+    // Notify active drivers whose daily fee has now expired (paidUntilDate null or past midnight)
+    if (global._vapidPublicKey) {
+      try {
+        const now = new Date();
+        const expiredDrivers = await User.find({
+          role: 'driver', accountStatus: 'active',
+          $or: [{ paidUntilDate: null }, { paidUntilDate: { $lte: now } }]
+        }).select('_id vehicleType').lean();
+
+        if (expiredDrivers.length) {
+          const vehicleTypeById = {};
+          expiredDrivers.forEach(d => { vehicleTypeById[String(d._id)] = d.vehicleType; });
+          const expiredIds = expiredDrivers.map(d => d._id);
+          const subs = await PushSub.find({ user: { $in: expiredIds } }).lean();
+
+          subs.forEach(sub => {
+            const vehicleType = vehicleTypeById[String(sub.user)] || '';
+            const feeAmount   = DAILY_FEE_RATES[vehicleType] || 220;
+            const payload = JSON.stringify({
+              title: '🔒 Daily Fee Expired',
+              body:  `Your daily platform fee of Rs ${feeAmount} is due. Pay now to unlock ride requests.`,
+              url:   '/driver#payments'
+            });
+            webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: sub.keys },
+              payload,
+              { urgency: 'high', TTL: 3600 }
+            ).catch(err => {
+              if (err.statusCode === 410) PushSub.deleteOne({ _id: sub._id }).catch(() => {});
+            });
+          });
+          console.log(`🔒 Fee-expiry notification sent to ${expiredDrivers.length} driver(s)`);
+        }
+      } catch (notifyErr) { console.warn('Fee-expiry notify error:', notifyErr.message); }
+    }
   } catch (err) { console.error('Daily deduction error:', err.message); }
 }
 
