@@ -264,6 +264,7 @@ input[type=date]:focus{border-color:#f5c518}
       <div class="sb-item"        onclick="showSection('blk-pass')"     data-sec="blk-pass">    <span class="sb-icon">🚫</span> Blocked Users</div>
       <div class="sb-item"        onclick="showSection('live-rides')"   data-sec="live-rides">  <span class="sb-icon">🗺️</span> Live Rides</div>
       <div class="sb-item"        onclick="showSection('sos')"          data-sec="sos">         <span class="sb-icon">🆘</span> SOS Monitor <span class="sb-badge-count" id="sos-cnt" style="display:none">0</span></div>
+      <div class="sb-item"        onclick="showSection('fee-compliance')" data-sec="fee-compliance"><span class="sb-icon">📋</span> Fee Compliance <span class="sb-badge-count" id="fee-cnt" style="display:none">0</span></div>
       <div class="sb-item"        onclick="showSection('pay-settings')" data-sec="pay-settings"><span class="sb-icon">⚙️</span> Payment Settings</div>
       <div class="sb-item"        onclick="showSection('ratings')"      data-sec="ratings">      <span class="sb-icon">⭐</span> Ratings & Feedback</div>
       <div class="sb-item"        onclick="showSection('support')"      data-sec="support">      <span class="sb-icon">🎫</span> Support Tickets <span class="sb-badge-count" id="sup-cnt" style="display:none">0</span></div>
@@ -545,7 +546,44 @@ input[type=date]:focus{border-color:#f5c518}
         <div id="support-list"><div class="loading-row">Loading…</div></div>
       </div>
 
-      <!-- ════ 13. SUB-ADMIN USERS ════ -->
+      <!-- ════ 13. DAILY FEE COMPLIANCE ════ -->
+      <div class="section-panel" id="sec-fee-compliance">
+        <div class="sec-hdr">
+          <h2>📋 Daily Fee Compliance</h2>
+          <div class="sec-hdr-actions">
+            <button class="btn btn-yellow" id="remind-btn" onclick="sendFeeReminder()">🔔 Send Reminder to Unpaid</button>
+            <button class="btn-refresh" onclick="loadFeeCompliance()">↻ Refresh</button>
+          </div>
+        </div>
+        <p style="font-size:.78rem;color:#475569;margin-bottom:1rem">Drivers who have paid today's platform fee vs those who haven't. Click a driver to view their TRX history.</p>
+
+        <!-- Summary badges -->
+        <div id="fee-summary" style="display:flex;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap"></div>
+
+        <!-- Unpaid group -->
+        <div style="margin-bottom:1.5rem">
+          <div style="font-size:.78rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">
+            ⚠ Unpaid Today <span id="unpaid-count" style="font-size:.75rem;color:#64748b;font-weight:400"></span>
+          </div>
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Driver</th><th>Phone</th><th>Vehicle</th><th>Last Paid</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="unpaid-tbody"><tr><td colspan="6" class="loading-row">Loading…</td></tr></tbody>
+          </table></div>
+        </div>
+
+        <!-- Paid group -->
+        <div>
+          <div style="font-size:.78rem;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem">
+            ✓ Paid Today <span id="paid-count" style="font-size:.75rem;color:#64748b;font-weight:400"></span>
+          </div>
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Driver</th><th>Phone</th><th>Vehicle</th><th>Paid Until</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="paid-tbody"><tr><td colspan="6" class="loading-row">Loading…</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ════ 14. SUB-ADMIN USERS ════ -->
       <div class="section-panel" id="sec-sub-admins">
         <div class="sec-hdr">
           <h2>👤 Sub-Admin User Management</h2>
@@ -569,6 +607,22 @@ input[type=date]:focus{border-color:#f5c518}
     </div><!-- /content-area -->
   </div><!-- /main -->
 </div><!-- /admin-app -->
+
+<!-- ── Driver Fee History Modal ── -->
+<div class="modal-backdrop" id="fee-hist-modal">
+  <div class="modal-box" style="max-width:680px;width:95vw">
+    <div class="modal-header">
+      <div class="modal-title" id="fee-hist-title">📋 Fee History</div>
+      <button class="btn-close" onclick="closeModal('fee-hist-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="fee-hist-body" style="max-height:70vh;overflow-y:auto">
+      <div class="loading-row">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('fee-hist-modal')">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── SOS Flash Overlay ── -->
 <div id="sos-flash"></div>
@@ -854,6 +908,7 @@ const SECTION_TITLES = {
   passengers:'Passengers Directory', 'new-requests':'New Driver Requests',
   'temp-blocked':'Temporarily Blocked Drivers', 'blk-pass':'Blocked Passengers',
   'live-rides':'Live Rides & History', sos:'SOS Alert Monitor',
+  'fee-compliance':'Daily Fee Compliance',
   'pay-settings':'Payment Settings', ratings:'Ratings & Feedback', support:'Support Tickets',
   'sub-admins':'Sub-Admin User Management'
 };
@@ -873,6 +928,7 @@ function showSection(name) {
     'new-requests': loadNewRequests, 'temp-blocked': loadTempBlocked,
     'blk-pass': loadBlockedPass, 'live-rides': () => loadRides(currentRideStatus),
     sos: () => loadSOS(currentSOSFilter), 'pay-settings': loadPaymentSettings,
+    'fee-compliance': loadFeeCompliance,
     ratings: loadRatings, support: () => loadSupportTickets(currentSupStatus),
     'sub-admins': loadSubAdmins
   };
@@ -1350,6 +1406,169 @@ function badgeHtml(status) {
   return `<span class="badge ${map[status]||'badge-pending'}">${labels[status]||status}</span>`;
 }
 
+// ── Daily Fee Compliance ──────────────────────────────────────────────────────
+const FEE_RATES_COMP = { 'Bike': 70, 'Rickshaw': 130, 'Car Mini': 220, 'Car AC': 270 };
+
+// Escape user-controlled strings before inserting into innerHTML
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// Build a compliance table row safely; bind the History button via data-fid (no inline onclick)
+function feeRow(d, dateCell) {
+  const rate = FEE_RATES_COMP[d.vehicleType] || 220;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><span style="font-weight:600;color:#e2e8f0">${escHtml(d.name)}</span></td>
+    <td style="font-size:.78rem;color:#94a3b8">${escHtml(d.phone) || '—'}</td>
+    <td><span style="font-size:.75rem;color:#818cf8">${escHtml(d.vehicleType) || '—'}</span><br><span style="font-size:.68rem;color:#f59e0b">Rs ${rate}/day</span></td>
+    <td style="font-size:.75rem;color:#64748b">${dateCell}</td>
+    <td>${badgeHtml(d.accountStatus)}</td>
+    <td><button class="btn btn-gray" data-fid="${escHtml(d._id)}" style="font-size:.72rem;padding:.25rem .6rem">📋 History</button></td>`;
+  // Bind click handler safely — no user data in JS strings
+  tr.querySelector('[data-fid]').addEventListener('click', function () {
+    viewDriverFeeHistory(this.dataset.fid, d.name);
+  });
+  return tr;
+}
+
+async function loadFeeCompliance() {
+  const unpaidTbody = document.getElementById('unpaid-tbody');
+  const paidTbody   = document.getElementById('paid-tbody');
+  unpaidTbody.innerHTML = '<tr><td colspan="6" class="loading-row">Loading…</td></tr>';
+  paidTbody.innerHTML   = '<tr><td colspan="6" class="loading-row">Loading…</td></tr>';
+  try {
+    const data = await api('/api/admin/daily-fee-compliance');
+    const { paid, unpaid } = data;
+
+    // Update summary badges (counts are integers — safe to interpolate)
+    const summary = document.getElementById('fee-summary');
+    const totalDrivers = paid.length + unpaid.length;
+    const pctPaid = totalDrivers ? Math.round((paid.length / totalDrivers) * 100) : 0;
+    summary.innerHTML = `
+      <div style="background:#052a10;border:1px solid #16a34a;border-radius:10px;padding:.55rem 1rem;font-size:.82rem;font-weight:700;color:#22c55e">✓ Paid: ${paid.length}</div>
+      <div style="background:#1c0d00;border:1px solid #b45309;border-radius:10px;padding:.55rem 1rem;font-size:.82rem;font-weight:700;color:#f59e0b">⚠ Unpaid: ${unpaid.length}</div>
+      <div style="background:#0f0f1e;border:1px solid #1e1e2e;border-radius:10px;padding:.55rem 1rem;font-size:.82rem;font-weight:700;color:#94a3b8">Total: ${totalDrivers} · ${pctPaid}% compliant</div>
+    `;
+
+    // Sidebar badge
+    const feeEl = document.getElementById('fee-cnt');
+    feeEl.textContent = unpaid.length;
+    feeEl.style.display = unpaid.length ? 'inline' : 'none';
+
+    // Count labels
+    document.getElementById('unpaid-count').textContent = `(${unpaid.length})`;
+    document.getElementById('paid-count').textContent   = `(${paid.length})`;
+
+    // Render unpaid rows
+    unpaidTbody.innerHTML = '';
+    if (!unpaid.length) {
+      unpaidTbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="empty-icon">🎉</span>All active drivers have paid today!</div></td></tr>';
+    } else {
+      unpaid.forEach(d => {
+        const dateCell = d.lastDailyFeePaidAt
+          ? escHtml(fmtDate(d.lastDailyFeePaidAt))
+          : '<span style="color:#ef4444">Never</span>';
+        unpaidTbody.appendChild(feeRow(d, dateCell));
+      });
+    }
+
+    // Render paid rows
+    paidTbody.innerHTML = '';
+    if (!paid.length) {
+      paidTbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="empty-icon">💳</span>No active drivers have paid today yet</div></td></tr>';
+    } else {
+      paid.forEach(d => {
+        const dateCell = d.paidUntilDate
+          ? `<span style="color:#22c55e">${escHtml(fmtDate(d.paidUntilDate))}</span>`
+          : '—';
+        paidTbody.appendChild(feeRow(d, dateCell));
+      });
+    }
+  } catch (e) {
+    unpaidTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:1rem">Failed to load compliance data</td></tr>';
+    paidTbody.innerHTML   = '';
+  }
+}
+
+async function sendFeeReminder() {
+  const btn = document.getElementById('remind-btn');
+  if (!confirm('Send a push notification reminder to all unpaid active drivers?')) return;
+  btn.disabled = true; btn.textContent = '⏳ Sending…';
+  try {
+    const r = await api('/api/admin/daily-fee-compliance/remind', 'POST');
+    if (r.sent === 0) {
+      showToast(r.message || 'No push subscriptions found for unpaid drivers', 'info');
+    } else {
+      showToast(`✓ Reminder sent to ${r.sent} device${r.sent !== 1 ? 's' : ''} (${r.drivers} unpaid drivers)`, 'success');
+    }
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '🔔 Send Reminder to Unpaid'; }
+}
+
+async function viewDriverFeeHistory(driverId, driverName) {
+  // Set title safely via textContent — never innerHTML with user data
+  document.getElementById('fee-hist-title').textContent = `📋 ${driverName} — Fee History`;
+  const body = document.getElementById('fee-hist-body');
+  body.innerHTML = '<div class="loading-row">Loading…</div>';
+  openModal('fee-hist-modal');
+  try {
+    const { driver, payments } = await api(`/api/admin/daily-fee-compliance/driver/${encodeURIComponent(driverId)}`);
+    const rate   = FEE_RATES_COMP[driver.vehicleType] || 220;
+    const now    = new Date();
+    const isPaid = driver.paidUntilDate && new Date(driver.paidUntilDate) >= now;
+
+    // Build the summary card using DOM manipulation for user-controlled fields
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#0f0f1e;border:1px solid #1e1e2e;border-radius:10px;padding:1rem;margin-bottom:1.2rem;display:flex;gap:1.25rem;flex-wrap:wrap';
+    [
+      ['Vehicle',      escHtml(driver.vehicleType) || '—',               '#818cf8'],
+      ['Daily Rate',   `Rs ${rate}`,                                      '#f5c518'],
+      ["Today's Status", isPaid ? '✓ Paid' : '⚠ Unpaid',                isPaid ? '#22c55e' : '#f59e0b'],
+      ['Last Paid At', driver.lastDailyFeePaidAt ? escHtml(fmtDate(driver.lastDailyFeePaidAt)) : '<span style="color:#ef4444">Never</span>', '#94a3b8'],
+      ['Paid Until',   driver.paidUntilDate ? escHtml(fmtDate(driver.paidUntilDate)) : '—', '#94a3b8'],
+    ].forEach(([label, val, color]) => {
+      card.innerHTML += `<div><div style="font-size:.68rem;color:#475569;text-transform:uppercase">${label}</div><div style="font-weight:700;color:${color};font-size:.8rem">${val}</div></div>`;
+    });
+
+    body.innerHTML = '';
+    body.appendChild(card);
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem';
+    hdr.textContent = 'TRX Submissions (last 30)';
+    body.appendChild(hdr);
+
+    if (!payments.length) {
+      body.innerHTML += '<div class="empty-state"><span class="empty-icon">📭</span>No TRX submissions yet</div>';
+    } else {
+      const wrap = document.createElement('div');
+      wrap.className = 'table-wrap';
+      const rows = payments.map(p => `<tr>
+        <td style="font-size:.72rem;color:#64748b">${escHtml(p.submittedDate)}</td>
+        <td><code style="color:#818cf8;font-size:.75rem">${escHtml(p.trxId)}</code></td>
+        <td style="font-weight:700;color:#f5c518">Rs ${Number(p.amount||0).toLocaleString()}</td>
+        <td style="font-size:.75rem;color:#94a3b8">${escHtml(p.paymentType) || '—'}</td>
+        <td>${badgeHtml(p.status)}</td>
+        <td style="font-size:.72rem;color:#64748b">${escHtml(p.adminNote) || '—'}</td>
+      </tr>`).join('');
+      wrap.innerHTML = `<table class="data-table">
+        <thead><tr><th>Date</th><th>TRX ID</th><th>Amount</th><th>Method</th><th>Status</th><th>Note</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+      body.appendChild(wrap);
+    }
+  } catch (e) {
+    body.innerHTML = '<div style="color:#ef4444;text-align:center;padding:1rem">Failed to load driver history</div>';
+  }
+}
+
 // ── Ratings & Feedback ────────────────────────────────────────────────────────
 async function loadRatings() {
   const tbody = document.getElementById('ratings-tbody');
@@ -1534,6 +1753,10 @@ function applyPermissions() {
   // Payments tab — needs manageWallets
   const sbPay = document.querySelector('[data-sec="payments"]');
   if (sbPay) sbPay.style.display = (sa || p.manageWallets) ? '' : 'none';
+
+  // Fee Compliance tab — needs manageWallets (shows driver contact + TRX data and sends push reminders)
+  const sbFee = document.querySelector('[data-sec="fee-compliance"]');
+  if (sbFee) sbFee.style.display = (sa || p.manageWallets) ? '' : 'none';
 
   // Live rides tab — needs viewRides
   const sbRides = document.querySelector('[data-sec="live-rides"]');

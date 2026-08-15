@@ -1731,6 +1731,70 @@ app.post('/api/admin/drivers/grant-trial', adminJwt, requirePerm('manageWallets'
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/admin/daily-fee-compliance — active drivers grouped by paid / unpaid for today
+app.get('/api/admin/daily-fee-compliance', adminJwt, requirePerm('manageWallets'), async (req, res) => {
+  try {
+    const now = new Date();
+    const drivers = await User.find({ role: 'driver', accountStatus: 'active' })
+      .select('name phone vehicleType paidUntilDate lastDailyFeePaidAt accountStatus rating totalRides')
+      .sort('name')
+      .lean();
+
+    const paid   = [];
+    const unpaid = [];
+    for (const d of drivers) {
+      if (d.paidUntilDate && new Date(d.paidUntilDate) >= now) paid.push(d);
+      else unpaid.push(d);
+    }
+    res.json({ paid, unpaid, asOf: now.toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/daily-fee-compliance/driver/:id — individual driver fee & TRX history
+app.get('/api/admin/daily-fee-compliance/driver/:id', adminJwt, requirePerm('manageWallets'), async (req, res) => {
+  try {
+    const driver = await User.findOne({ _id: req.params.id, role: 'driver' })
+      .select('name phone vehicleType paidUntilDate lastDailyFeePaidAt accountStatus rating totalRides')
+      .lean();
+    if (!driver) return res.status(404).json({ error: 'Driver not found' });
+    const payments = await Payment.find({ driver: req.params.id })
+      .select('trxId amount status submittedDate createdAt adminNote paymentType')
+      .sort('-createdAt').limit(30).lean();
+    res.json({ driver, payments });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/admin/daily-fee-compliance/remind — push reminder to all unpaid active drivers
+app.post('/api/admin/daily-fee-compliance/remind', adminJwt, requirePerm('manageWallets'), async (req, res) => {
+  try {
+    if (!global._vapidPublicKey) return res.status(503).json({ error: 'Push notifications not configured' });
+    const now = new Date();
+    const unpaidDrivers = await User.find({
+      role: 'driver', accountStatus: 'active',
+      $or: [{ paidUntilDate: null }, { paidUntilDate: { $lt: now } }]
+    }).select('_id').lean();
+    const driverIds = unpaidDrivers.map(d => d._id);
+    if (!driverIds.length) return res.json({ success: true, sent: 0, message: 'No unpaid active drivers found' });
+    const subs = await PushSub.find({ user: { $in: driverIds } }).lean();
+    if (!subs.length) return res.json({ success: true, sent: 0, message: 'No push subscriptions for unpaid drivers' });
+    const payload = JSON.stringify({
+      title: "⚠️ Daily Fee Reminder",
+      body:  "You haven't paid today's platform fee. Pay now to keep accepting ride requests.",
+      url:   '/driver'
+    });
+    let sent = 0;
+    await Promise.allSettled(subs.map(async sub => {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload, { urgency: 'high', TTL: 3600 });
+        sent++;
+      } catch (err) {
+        if (err.statusCode === 410) await PushSub.deleteOne({ _id: sub._id }).catch(() => {});
+      }
+    }));
+    res.json({ success: true, sent, total: subs.length, drivers: driverIds.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // POST /api/admin/drivers/grant-fee-waiver — set paidUntilDate for selected drivers (waiver / advance pay)
 app.post('/api/admin/drivers/grant-fee-waiver', adminJwt, requirePerm('manageWallets'), async (req, res) => {
   try {
