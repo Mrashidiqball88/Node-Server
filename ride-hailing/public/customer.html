@@ -91,7 +91,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 /* ── Location inputs ── */
 .loc-wrap{position:relative;margin-bottom:.75rem}
 .pin-indicator{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);font-size:1rem;z-index:1;pointer-events:none}
-.location-input{width:100%;background:#0a0a0f;border:1px solid #333;border-radius:12px;padding:.75rem 1rem .75rem 2.5rem;color:#fff;font-size:.9rem;outline:none;transition:border-color .2s}
+.location-input{width:100%;background:#0a0a0f;border:1px solid #333;border-radius:12px;padding:.75rem 2rem .75rem 2.5rem;color:#fff;font-size:.9rem;outline:none;transition:border-color .2s}
+.btn-clear-loc{display:none;position:absolute;right:.55rem;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;border:none;background:#2a2a3a;color:#94a3b8;font-size:.7rem;line-height:1;cursor:pointer;z-index:2;align-items:center;justify-content:center}
+.btn-clear-loc.visible{display:flex}
+.btn-clear-loc:hover{background:#3a3a50;color:#fff}
 .location-input:focus{border-color:#f5c518}
 .location-input.has-val{border-color:#2d5a2d}
 .location-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1a1a2a;border:1px solid #333;border-radius:10px;max-height:185px;overflow-y:auto;z-index:500;display:none;box-shadow:0 8px 24px rgba(0,0,0,.6)}
@@ -399,9 +402,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
         <input class="location-input" id="pickup-input"
                placeholder="Search pickup (e.g. Thokar Niaz Baig)"
                autocomplete="off" spellcheck="false"
-               oninput="onLocInput('pickup')"
+               oninput="onLocInput('pickup');updateClearBtn('pickup')"
                onfocus="onLocFocus('pickup')"
                onblur="onLocBlur('pickup')">
+        <button class="btn-clear-loc" id="clear-pickup" onclick="clearLocation('pickup')" title="Clear pickup">✕</button>
         <div class="location-dropdown" id="pickup-dropdown"></div>
       </div>
 
@@ -421,9 +425,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
             <input class="location-input" id="stop-0-input"
                    placeholder="Search Drop 1 (e.g. DHA Phase 5)"
                    autocomplete="off" spellcheck="false"
-                   oninput="onLocInput('stop-0')"
+                   oninput="onLocInput('stop-0');updateClearBtn('stop-0')"
                    onfocus="onLocFocus('stop-0')"
                    onblur="onLocBlur('stop-0')">
+            <button class="btn-clear-loc" id="clear-stop-0" onclick="clearLocation('stop-0')" title="Clear drop 1">✕</button>
             <div class="location-dropdown" id="stop-0-dropdown"></div>
           </div>
         </div>
@@ -440,9 +445,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
             <input class="location-input" id="stop-1-input"
                    placeholder="Search Drop 2 (optional)"
                    autocomplete="off" spellcheck="false"
-                   oninput="onLocInput('stop-1')"
+                   oninput="onLocInput('stop-1');updateClearBtn('stop-1')"
                    onfocus="onLocFocus('stop-1')"
                    onblur="onLocBlur('stop-1')">
+            <button class="btn-clear-loc" id="clear-stop-1" onclick="clearLocation('stop-1')" title="Clear drop 2">✕</button>
             <div class="location-dropdown" id="stop-1-dropdown"></div>
           </div>
         </div>
@@ -459,9 +465,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
             <input class="location-input" id="stop-2-input"
                    placeholder="Search Drop 3 (optional)"
                    autocomplete="off" spellcheck="false"
-                   oninput="onLocInput('stop-2')"
+                   oninput="onLocInput('stop-2');updateClearBtn('stop-2')"
                    onfocus="onLocFocus('stop-2')"
                    onblur="onLocBlur('stop-2')">
+            <button class="btn-clear-loc" id="clear-stop-2" onclick="clearLocation('stop-2')" title="Clear drop 3">✕</button>
             <div class="location-dropdown" id="stop-2-dropdown"></div>
           </div>
         </div>
@@ -478,9 +485,10 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
             <input class="location-input" id="stop-3-input"
                    placeholder="Search Drop 4 (optional)"
                    autocomplete="off" spellcheck="false"
-                   oninput="onLocInput('stop-3')"
+                   oninput="onLocInput('stop-3');updateClearBtn('stop-3')"
                    onfocus="onLocFocus('stop-3')"
                    onblur="onLocBlur('stop-3')">
+            <button class="btn-clear-loc" id="clear-stop-3" onclick="clearLocation('stop-3')" title="Clear drop 4">✕</button>
             <div class="location-dropdown" id="stop-3-dropdown"></div>
           </div>
         </div>
@@ -1132,6 +1140,7 @@ async function setPickup(lat, lng, preDisplay = null) {
   const addr = preDisplay || await reverseGeocode(lat, lng);
   pickup.address = addr;
   document.getElementById('pickup-input').value = addr;
+  updateClearBtn('pickup');
 
   mapMode = 'stop-0';
   const hint = document.getElementById('map-hint');
@@ -1161,6 +1170,7 @@ async function setStop(idx, lat, lng, preDisplay = null) {
   const addr = preDisplay || await reverseGeocode(lat, lng);
   dropoffs[idx].address = addr;
   document.getElementById(`stop-${idx}-input`).value = addr;
+  updateClearBtn(`stop-${idx}`);
 
   mapMode = 'idle';
   document.getElementById('map-hint').style.display = 'none';
@@ -1172,6 +1182,49 @@ async function setStop(idx, lat, lng, preDisplay = null) {
   } else {
     map.setView([lat, lng], 14);
   }
+}
+
+// ── Clear Location ────────────────────────────────────────────────────────
+function updateClearBtn(type) {
+  const inp    = document.getElementById(`${type === 'pickup' ? 'pickup' : type}-input`);
+  const btnId  = type === 'pickup' ? 'clear-pickup' : `clear-${type}`;
+  const btn    = document.getElementById(btnId);
+  if (!btn) return;
+  btn.classList.toggle('visible', !!(inp && inp.value.trim()));
+}
+
+function clearLocation(type) {
+  const isPickup = type === 'pickup';
+  const inputId  = isPickup ? 'pickup-input' : `${type}-input`;
+  const btnId    = isPickup ? 'clear-pickup' : `clear-${type}`;
+  const inp      = document.getElementById(inputId);
+  if (inp) { inp.value = ''; inp.classList.remove('has-val'); }
+  const btn = document.getElementById(btnId);
+  if (btn) btn.classList.remove('visible');
+  closeDropdown(type);
+
+  if (isPickup) {
+    pickup = null;
+    if (pickupMarker) { pickupMarker.remove(); pickupMarker = null; }
+    const hint = document.getElementById('map-hint');
+    if (hint) { hint.textContent = 'Tap map or search a pickup location below'; hint.className = 'map-hint'; hint.style.display = 'block'; }
+    mapMode = 'pickup';
+  } else {
+    const idx = parseInt(type.replace('stop-', ''));
+    dropoffs[idx] = null;
+    if (stopMarkers[idx]) { stopMarkers[idx].remove(); stopMarkers[idx] = null; }
+  }
+
+  // Clear route and reset fare whenever any location is removed
+  if (routeLine) { (Array.isArray(routeLine) ? routeLine : [routeLine]).forEach(l => l.remove()); routeLine = null; }
+  routeDistanceKm = null;
+  document.getElementById('fare-row').style.display  = 'none';
+  document.getElementById('book-btn').style.display  = 'none';
+  document.getElementById('dist-badge').style.display = 'none';
+
+  // If there's still a valid pickup+stop combo, redraw route
+  const hasRoute = pickup && dropoffs.slice(0, activeStops).some(d => d);
+  if (hasRoute) drawRoute().then(km => { routeDistanceKm = km; updateFare(); });
 }
 
 async function drawRoute() {

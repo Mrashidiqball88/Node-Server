@@ -1426,10 +1426,11 @@ app.patch('/api/admin/users/:id/status', adminJwt, async (req, res) => {
     }
 
     let update = {};
-    if      (action === 'approve')  update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
-    else if (action === 'suspend')  update = { accountStatus: 'suspended', suspendReason: reason || 'Temporary suspension', suspendedAt: new Date() };
-    else if (action === 'block')    update = { accountStatus: 'blocked',   suspendReason: reason || 'Permanently blocked',  suspendedAt: new Date() };
-    else if (action === 'unblock')  update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
+    if      (action === 'approve')          update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
+    else if (action === 'suspend')          update = { accountStatus: 'suspended', suspendReason: reason || 'Temporary suspension', suspendedAt: new Date() };
+    else if (action === 'block')            update = { accountStatus: 'blocked',   suspendReason: reason || 'Permanently blocked',  suspendedAt: new Date() };
+    else if (action === 'unblock')          update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
+    else if (action === 'reject-deletion')  update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
     else return res.status(400).json({ error: 'Invalid action' });
 
     const user = await User.findByIdAndUpdate(req.params.id, { ...update, isOnline: false }, { new: true }).select('-password');
@@ -1437,10 +1438,33 @@ app.patch('/api/admin/users/:id/status', adminJwt, async (req, res) => {
 
     if (action === 'suspend' || action === 'block')
       io.to(`user:${req.params.id}`).emit('account:suspended', { reason: reason || 'Account suspended' });
-    if (action === 'approve' || action === 'unblock')
+    if (action === 'approve' || action === 'unblock' || action === 'reject-deletion')
       io.to(`user:${req.params.id}`).emit('account:activated', {});
 
     res.json({ success: true, user });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/account-deletion-requests
+app.get('/api/admin/account-deletion-requests', adminJwt, async (req, res) => {
+  try {
+    const users = await User.find({ accountStatus: 'pending_deletion' })
+      .select('name phone email role vehicleType createdAt updatedAt')
+      .sort('-updatedAt')
+      .lean();
+    res.json(users);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/admin/users/:id — permanently purge a user account
+app.delete('/api/admin/users/:id', adminJwt, requireSuperAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('name role');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    // Disconnect live socket session
+    io.to(`user:${req.params.id}`).emit('account:deleted', { reason: 'Your account has been permanently deleted.' });
+    await User.deleteOne({ _id: req.params.id });
+    res.json({ success: true, name: user.name });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -268,6 +268,7 @@ input[type=date]:focus{border-color:#f5c518}
       <div class="sb-item"        onclick="showSection('pay-settings')" data-sec="pay-settings"><span class="sb-icon">⚙️</span> Payment Settings</div>
       <div class="sb-item"        onclick="showSection('ratings')"      data-sec="ratings">      <span class="sb-icon">⭐</span> Ratings & Feedback</div>
       <div class="sb-item"        onclick="showSection('support')"      data-sec="support">      <span class="sb-icon">🎫</span> Support Tickets <span class="sb-badge-count" id="sup-cnt" style="display:none">0</span></div>
+      <div class="sb-item" onclick="showSection('deletions')" data-sec="deletions"><span class="sb-icon">🗑️</span> Deletion Requests <span class="sb-badge-count" id="del-cnt" style="display:none">0</span></div>
       <div class="sb-item" id="sb-sub-admins" onclick="showSection('sub-admins')" data-sec="sub-admins"><span class="sb-icon">👤</span> Sub-Admin Users</div>
     </div>
     <div class="sb-footer">
@@ -583,7 +584,22 @@ input[type=date]:focus{border-color:#f5c518}
         </div>
       </div>
 
-      <!-- ════ 14. SUB-ADMIN USERS ════ -->
+      <!-- ════ 14. DELETION REQUESTS ════ -->
+      <div class="section-panel" id="sec-deletions">
+        <div class="sec-hdr">
+          <h2>🗑️ Account Deletion Requests</h2>
+          <button class="btn-refresh" onclick="loadDeletionRequests()">↻</button>
+        </div>
+        <p style="font-size:.78rem;color:#475569;margin-bottom:1rem">Users who have requested account deletion from the app. Approve to permanently purge their data, or reject to restore their account.</p>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr>
+            <th>Name</th><th>Phone</th><th>Role</th><th>Requested</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="del-tbody"><tr><td colspan="5" class="loading-row">Loading…</td></tr></tbody>
+        </table></div>
+      </div>
+
+      <!-- ════ 15. SUB-ADMIN USERS ════ -->
       <div class="section-panel" id="sec-sub-admins">
         <div class="sec-hdr">
           <h2>👤 Sub-Admin User Management</h2>
@@ -849,6 +865,11 @@ function bootAdmin() {
   connectSocket();
   loadOverview();
   loadStats();
+  // Populate deletion requests badge on startup
+  api('/api/admin/account-deletion-requests').then(users => {
+    const el = document.getElementById('del-cnt');
+    if (el && users.length) { el.textContent = users.length; el.style.display = 'inline-flex'; }
+  }).catch(() => {});
 }
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
@@ -930,6 +951,7 @@ function showSection(name) {
     sos: () => loadSOS(currentSOSFilter), 'pay-settings': loadPaymentSettings,
     'fee-compliance': loadFeeCompliance,
     ratings: loadRatings, support: () => loadSupportTickets(currentSupStatus),
+    deletions: loadDeletionRequests,
     'sub-admins': loadSubAdmins
   };
   loaders[name]?.();
@@ -1086,6 +1108,7 @@ async function loadDrivers(status = 'all') {
           ${d.accountStatus==='suspended' && (isSuperAdmin||adminPerms.blockDrivers)   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>
             <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔</button>` : ''}
           ${d.accountStatus==='blocked'   && (isSuperAdmin||adminPerms.blockDrivers)   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>` : ''}
+          ${isSuperAdmin ? `<button class="btn btn-red" onclick="openDeleteModal('${d._id}','${d.name.replace(/'/g,"\\'")}','driver')" title="Delete Account">🗑</button>` : ''}
         </div></td>
       </tr>`;
     }).join('');
@@ -1111,6 +1134,7 @@ async function loadPassengers(status = 'all') {
         ${(isSuperAdmin||adminPerms.blockCustomers) ? ((p.accountStatus==='blocked')
           ? `<button class="btn btn-green" onclick="userAction('${p._id}','unblock','customer')">▶ Unblock</button>`
           : `<button class="btn btn-red"   onclick="userAction('${p._id}','block','customer')">⛔ Block</button>`) : ''}
+        ${isSuperAdmin ? `<button class="btn btn-red" onclick="openDeleteModal('${p._id}','${p.name.replace(/'/g,"\\'")}','customer')" title="Delete Account">🗑</button>` : ''}
       </div></td>
     </tr>`).join('');
   } catch (e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
@@ -1708,6 +1732,79 @@ async function submitTrialGrant() {
   }
 }
 
+// ── Account Deletion Management ───────────────────────────────────────────
+async function loadDeletionRequests() {
+  const tbody = document.getElementById('del-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="loading-row">Loading…</td></tr>';
+  try {
+    const users = await api('/api/admin/account-deletion-requests');
+    const delCnt = document.getElementById('del-cnt');
+    if (delCnt) {
+      delCnt.textContent = users.length;
+      delCnt.style.display = users.length ? 'inline-flex' : 'none';
+    }
+    if (!users.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><span class="empty-icon">✅</span>No pending deletion requests</td></tr>';
+      return;
+    }
+    tbody.innerHTML = users.map(u => `<tr>
+      <td><div style="font-weight:700;color:#e2e8f0">${u.name}</div></td>
+      <td>${u.phone || u.email || '—'}</td>
+      <td><span class="status-badge" style="background:#1e3a5f;color:#93c5fd">${u.role}</span></td>
+      <td style="font-size:.72rem;color:#475569">${fmtDate(u.updatedAt)}</td>
+      <td><div style="display:flex;gap:.4rem">
+        <button class="btn btn-red"   onclick="approveDeletion('${u._id}','${u.name.replace(/'/g,"\\'")}')">🗑 Approve & Delete</button>
+        <button class="btn btn-green" onclick="rejectDeletion('${u._id}','${u.name.replace(/'/g,"\\'")}')">↩ Reject Request</button>
+      </div></td>
+    </tr>`).join('');
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
+}
+
+async function approveDeletion(userId, name) {
+  openDeleteModal(userId, name, null, true);
+}
+
+async function rejectDeletion(userId, name) {
+  if (!confirm(`Reject deletion request for ${name}? Their account will be restored to active.`)) return;
+  try {
+    await api(`/api/admin/users/${userId}/status`, 'PATCH', { action: 'reject-deletion' });
+    showToast(`✓ ${name}'s deletion request rejected — account restored`, 'success');
+    loadDeletionRequests();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+let _deleteUserId = null, _deleteUserName = '', _deletionRequestMode = false;
+function openDeleteModal(userId, name, role, fromDeletionList = false) {
+  _deleteUserId = userId;
+  _deleteUserName = name;
+  _deletionRequestMode = fromDeletionList;
+  document.getElementById('delete-modal-name').textContent = name;
+  document.getElementById('delete-modal-err').textContent = '';
+  const btn = document.getElementById('delete-confirm-btn');
+  btn.disabled = false; btn.textContent = 'Yes, Delete';
+  document.getElementById('delete-modal').style.display = 'flex';
+}
+function closeDeleteModal() {
+  document.getElementById('delete-modal').style.display = 'none';
+  _deleteUserId = null;
+}
+async function confirmDeleteUser() {
+  if (!_deleteUserId) return;
+  const btn = document.getElementById('delete-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  document.getElementById('delete-modal-err').textContent = '';
+  try {
+    await api(`/api/admin/users/${_deleteUserId}`, 'DELETE');
+    showToast(`✓ ${_deleteUserName}'s account permanently deleted`, 'success');
+    closeDeleteModal();
+    if (_deletionRequestMode) { loadDeletionRequests(); }
+    else { loadDrivers(currentDriverStatus); loadPassengers(currentPassStatus); }
+  } catch (e) {
+    document.getElementById('delete-modal-err').textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Yes, Delete';
+  }
+}
+
 function grantBulkTrial() {
   if (!selectedDriverIds.size) return showToast('Select at least one driver', 'error');
   openTrialModal([...selectedDriverIds]);
@@ -1961,6 +2058,20 @@ if (adminToken) {
   bootAdmin();
 } else document.getElementById('auth-overlay').style.display = 'flex';
 </script>
+<!-- ── Permanent Delete Confirm Modal ─────────────────────────────────────── -->
+<div id="delete-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:3200;align-items:center;justify-content:center">
+  <div style="background:#0d0d1e;border:1px solid #4a1a1a;border-radius:14px;padding:1.5rem;max-width:360px;width:90%;margin:auto">
+    <h3 style="color:#ef4444;margin:0 0 .75rem;font-size:1rem">⚠️ Delete Account Permanently</h3>
+    <p style="color:#cbd5e1;font-size:.85rem;margin:0 0 .3rem">Are you sure you want to permanently delete <strong id="delete-modal-name" style="color:#fff"></strong>'s account?</p>
+    <p style="color:#ef4444;font-size:.78rem;margin:0 0 1rem;font-weight:600">This action cannot be undone. All data will be purged from the database.</p>
+    <p id="delete-modal-err" style="color:#ef4444;font-size:.77rem;min-height:1em;margin-bottom:.65rem"></p>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="closeDeleteModal()" style="flex:1;padding:.7rem;border-radius:8px;border:1px solid #2a2a4a;background:#0d0d1e;color:#94a3b8;cursor:pointer;font-size:.85rem">Cancel</button>
+      <button id="delete-confirm-btn" onclick="confirmDeleteUser()" style="flex:1;padding:.7rem;border-radius:8px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:.85rem">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Grant Free Trial Modal ─────────────────────────────────────────────── -->
 <div id="trial-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:3100;align-items:center;justify-content:center">
   <div style="background:#0d0d1e;border:1px solid #2a2a4a;border-radius:14px;padding:1.5rem;max-width:340px;width:90%;margin:auto">
