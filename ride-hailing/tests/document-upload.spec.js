@@ -220,3 +220,114 @@ test.describe('Document upload flow — large photos (~1.7 MB each)', () => {
     }
   );
 });
+
+// ── Registration failure tests ────────────────────────────────────────────────
+
+test.describe('Registration failures — 409 duplicate phone and network error', () => {
+  /**
+   * Sets up all the standard stub routes except /api/auth/register so each
+   * test can install its own register handler.
+   */
+  async function setupRoutesWithoutRegister(page) {
+    await page.route('**/socket.io/**', (route) => {
+      if (route.request().url().endsWith('.js')) {
+        route.continue();
+      } else {
+        route.abort();
+      }
+    });
+    await page.route('**/api/auth/me', (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthorized"}' })
+    );
+    await page.route('**/api/wallet**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{"balance":0,"transactions":[]}' })
+    );
+    await page.route('**/api/rides/my**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    );
+    await page.route('**/api/settings/payment**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{"accounts":{}}' })
+    );
+    await page.route('**/api/support/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  test(
+    '409 duplicate phone — overlay hides and error message appears in #auth-error',
+    async ({ page }) => {
+      await setupRoutesWithoutRegister(page);
+
+      // Register endpoint returns 409 with a descriptive error body.
+      await page.route('**/api/auth/register', async (route) => {
+        await new Promise((r) => setTimeout(r, 100));
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Phone number already registered' }),
+        });
+      });
+
+      await page.goto('/driver');
+      await fillStep1(page);
+      await uploadPhotos(page);
+      await page.locator('#reg-submit-btn').click();
+
+      // Overlay should appear while the request is in-flight…
+      const overlay = page.locator('#upload-progress-screen');
+      await expect(overlay).toBeVisible({ timeout: 8_000 });
+
+      // …then hide once the 409 is received (no 600 ms success delay).
+      await expect(overlay).toBeHidden({ timeout: 8_000 });
+
+      // Auth screen must still be visible (driver was NOT logged in).
+      await expect(page.locator('#auth-screen')).toBeVisible();
+      await expect(page.locator('#app')).toBeHidden();
+
+      // The exact server error message must appear in #auth-error.
+      await expect(page.locator('#auth-error')).toHaveText(
+        'Phone number already registered',
+        { timeout: 3_000 }
+      );
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  test(
+    'network failure — overlay hides and network error message appears in #auth-error',
+    async ({ page }) => {
+      await setupRoutesWithoutRegister(page);
+
+      // Abort the connection to simulate a network drop / offline condition.
+      // A small delay lets the overlay appear before onerror fires so we can
+      // assert the in-flight state reliably.
+      await page.route('**/api/auth/register', async (route) => {
+        await new Promise((r) => setTimeout(r, 200));
+        await route.abort('failed');
+      });
+
+      await page.goto('/driver');
+      await fillStep1(page);
+      await uploadPhotos(page);
+      await page.locator('#reg-submit-btn').click();
+
+      // Overlay should appear while the XHR is in-flight…
+      const overlay = page.locator('#upload-progress-screen');
+      await expect(overlay).toBeVisible({ timeout: 8_000 });
+
+      // …then hide once xhr.onerror fires.
+      await expect(overlay).toBeHidden({ timeout: 8_000 });
+
+      // Auth screen must still be visible (driver was NOT logged in).
+      await expect(page.locator('#auth-screen')).toBeVisible();
+      await expect(page.locator('#app')).toBeHidden();
+
+      // A network-specific message must appear in #auth-error.
+      await expect(page.locator('#auth-error')).toHaveText(
+        'Network error — check your connection',
+        { timeout: 3_000 }
+      );
+    }
+  );
+});
