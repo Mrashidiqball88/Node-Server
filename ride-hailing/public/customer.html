@@ -1953,8 +1953,15 @@ function switchAppTab(name) {
 
 
 // ── Init ──────────────────────────────────────────────────────────────────
-if (token && user) bootApp();
-else document.getElementById('auth-screen').style.display = 'flex';
+if (token && user && user.role === 'driver') {
+  // Driver accidentally opened the Customer App — redirect without wiping their session.
+  alert('This account is registered as a Driver. Redirecting to the Driver App.');
+  window.location.replace('/driver');
+} else if (token && user) {
+  bootApp();
+} else {
+  document.getElementById('auth-screen').style.display = 'flex';
+}
 </script>
 <!-- ── PWA Service Worker Registration ── -->
 <script>

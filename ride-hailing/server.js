@@ -352,6 +352,28 @@ async function authMiddleware(req, res, next) {
 // Admin Middleware (two flavours)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── driverOnly — must follow authMiddleware ───────────────────────────────
+// Rejects any caller that is not a driver with an active (approved) account.
+function driverOnly(req, res, next) {
+  if (!req.user || req.user.role !== 'driver') {
+    return res.status(403).json({ error: 'Access denied: driver accounts only' });
+  }
+  // accountStatus is embedded in the JWT payload at login
+  if (req.user.accountStatus && req.user.accountStatus !== 'active') {
+    return res.status(403).json({ error: 'Your driver account is not yet approved or has been suspended' });
+  }
+  next();
+}
+
+// ── customerOnly — must follow authMiddleware ─────────────────────────────
+// Rejects any caller that is not a customer.
+function customerOnly(req, res, next) {
+  if (!req.user || req.user.role !== 'customer') {
+    return res.status(403).json({ error: 'Access denied: customer accounts only' });
+  }
+  next();
+}
+
 // Legacy: used by /api/payments/* routes (needs authMiddleware first)
 async function adminMiddleware(req, res, next) {
   try {
@@ -682,7 +704,7 @@ app.post('/api/rides', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/rides/available', authMiddleware, async (req, res) => {
+app.get('/api/rides/available', authMiddleware, driverOnly, async (req, res) => {
   try {
     const rides = await Ride.find({ status: 'requested' })
       .populate('passenger', 'name phone rating')
@@ -767,11 +789,16 @@ const STATUS_TRANSITIONS = {
   'in-progress':['completed']
 };
 
-app.patch('/api/rides/:id/status', authMiddleware, async (req, res) => {
+app.patch('/api/rides/:id/status', authMiddleware, driverOnly, async (req, res) => {
   try {
     const { status } = req.body;
     const ride = await Ride.findById(req.params.id);
     if (!ride) return res.status(404).json({ error: 'Ride not found' });
+
+    // Only the assigned driver may advance the ride status
+    if (String(ride.driver) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'You are not the driver for this ride' });
+    }
 
     const allowed = STATUS_TRANSITIONS[ride.status] || [];
     if (!allowed.includes(status)) {
@@ -822,6 +849,14 @@ app.patch('/api/rides/:id/cancel', authMiddleware, async (req, res) => {
     if (!['requested', 'accepted'].includes(ride.status)) {
       return res.status(400).json({ error: 'Cannot cancel at this stage' });
     }
+
+    // Only the passenger who booked or the assigned driver may cancel
+    const isPassenger = String(ride.passenger) === String(req.user.id);
+    const isDriver    = ride.driver && String(ride.driver) === String(req.user.id);
+    if (!isPassenger && !isDriver) {
+      return res.status(403).json({ error: 'You are not authorised to cancel this ride' });
+    }
+
     ride.status = 'cancelled';
     await ride.save();
     io.to(`ride:${ride._id}`).emit('ride:status', { rideId: ride._id, status: 'cancelled' });
@@ -1120,7 +1155,7 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
 });
 
 // GET /api/payments/my — driver's own payment history
-app.get('/api/payments/my', authMiddleware, async (req, res) => {
+app.get('/api/payments/my', authMiddleware, driverOnly, async (req, res) => {
   try {
     const payments = await Payment.find({ driver: req.user.id })
       .sort({ createdAt: -1 })

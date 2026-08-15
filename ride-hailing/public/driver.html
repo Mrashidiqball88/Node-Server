@@ -2066,9 +2066,16 @@ function skipDriverRating() {
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
-if (token && user && user.role === 'driver') bootApp();
-else if (token && user && user.role !== 'driver') {
-  localStorage.clear(); token = null; user = null;
+if (token && user && user.role === 'driver') {
+  bootApp();
+} else if (token && user && user.role !== 'driver') {
+  // Customer (or other non-driver) trying to open the Driver App — evict them.
+  // We preserve their session so they land already logged-in on the Customer App.
+  alert('Access Denied: This account is registered as a Customer. Redirecting to the Customer App.');
+  window.location.replace('/customer');
+} else {
+  // No session — show the auth screen so the driver can log in
+  document.getElementById('auth-screen').style.display = 'flex';
 }
 </script>
 
