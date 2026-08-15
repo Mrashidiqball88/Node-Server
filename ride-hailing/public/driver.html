@@ -423,6 +423,9 @@ textarea.support-input{resize:vertical;min-height:85px}
         <div class="dots-dropdown" id="driver-dots-dropdown" style="display:none">
           <div class="dots-item" onclick="openSupportModal();closeDriverMenu()">🎫 Contact Support</div>
           <div class="dots-item" onclick="openMyTickets();closeDriverMenu()">📋 My Tickets <span id="driver-ticket-badge" class="ticket-badge" style="display:none">0</span></div>
+          <div class="dots-item" onclick="openChangePhoneModal();closeDriverMenu()">📱 Change Phone Number</div>
+          <div class="dots-item" onclick="openChangePasswordModal();closeDriverMenu()">🔑 Change Password</div>
+          <div class="dots-item" onclick="openChangeVehicleModal();closeDriverMenu()">🚗 Change Vehicle Info</div>
           <div class="dots-item danger" onclick="openDeleteAccountModal();closeDriverMenu()">🗑 Delete Account</div>
           <div class="dots-item danger" onclick="doLogout()">🚪 Logout</div>
         </div>
@@ -611,6 +614,7 @@ let todayRides    = 0;
 let todayEarnings = 0;
 let alertAudioCtx = null;   // Web Audio context for ride alert
 let alertInterval = null;   // repeating beep interval
+let dailyFeeDue   = false;  // true when driver hasn't submitted today's platform fee
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -764,11 +768,10 @@ async function doRegister() {
   const vehiclePlate = document.getElementById('r-plate').value.trim().toUpperCase();
   const pass         = document.getElementById('r-pass').value;
 
-  const errEl    = document.getElementById('auth-error');
+  const errEl     = document.getElementById('auth-error');
   const submitBtn = document.getElementById('reg-submit-btn');
+  const resetBtn  = () => { if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Driver Account'; } };
 
-  // Use pre-compressed cache; fall back to compressing now if user navigated
-  // back and re-selected a file (edge case).
   const getPhoto = async (inputId, label) => {
     if (_photos[inputId]) return _photos[inputId];
     const file = document.getElementById(inputId)?.files[0];
@@ -779,34 +782,60 @@ async function doRegister() {
   };
 
   errEl.textContent = '';
-  // Disable button and show uploading indicator immediately
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Uploading documents, please wait…'; }
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Preparing…'; }
+
+  // Phase 1: compress photos client-side (before showing progress screen)
+  let profilePhoto, licensePhoto, cnicFront, cnicBack;
   try {
-    errEl.textContent = 'Preparing photos…';
-    const [profilePhoto, licensePhoto, cnicFront, cnicBack] = await Promise.all([
+    [profilePhoto, licensePhoto, cnicFront, cnicBack] = await Promise.all([
       getPhoto('r-profile-photo', 'Profile photo'),
       getPhoto('r-license-photo', 'Driving license photo'),
       getPhoto('r-cnic-front',    'CNIC Front photo'),
       getPhoto('r-cnic-back',     'CNIC Back photo'),
     ]);
+  } catch (e) { errEl.textContent = e.message; resetBtn(); return; }
 
-    // Validate non-photo fields (photos already confirmed above)
-    if (!name)  { errEl.textContent = 'Full name is required';    return; }
-    if (!phone) { errEl.textContent = 'Phone number is required'; return; }
-    if (pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
+  if (!name)  { errEl.textContent = 'Full name is required';    resetBtn(); return; }
+  if (!phone) { errEl.textContent = 'Phone number is required'; resetBtn(); return; }
+  if (pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; resetBtn(); return; }
 
-    errEl.textContent = 'Uploading documents and creating account…';
-    const res = await apiCall('/api/auth/register', 'POST', {
-      name, phone, password: pass,
-      role: 'driver', vehicleType: vehicle,
-      vehicleModel, vehiclePlate,
-      profilePhoto, licensePhoto, cnicFront, cnicBack
-    });
-    saveSession(res);
-  } catch (e) {
-    errEl.textContent = e.message;
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Driver Account'; }
-  }
+  // Phase 2: navigate to upload progress screen and send via XHR (has upload.progress events)
+  showUploadProgress();
+  setUploadProgress(0);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/auth/register');
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  if (token)        xhr.setRequestHeader('Authorization',   `Bearer ${token}`);
+  if (sessionToken) xhr.setRequestHeader('X-Session-Token', sessionToken);
+
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) setUploadProgress(Math.min(95, Math.round(e.loaded / e.total * 100)));
+  });
+  xhr.upload.addEventListener('load', () => setUploadProgress(98));
+
+  xhr.onload = () => {
+    let res = {};
+    try { res = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status >= 200 && xhr.status < 300) {
+      setUploadProgress(100);
+      setTimeout(() => { hideUploadProgress(); saveSession(res); }, 600);
+    } else {
+      hideUploadProgress();
+      errEl.textContent = res.error || `Upload failed (${xhr.status})`;
+      resetBtn();
+    }
+  };
+  xhr.onerror = () => {
+    hideUploadProgress();
+    errEl.textContent = 'Network error — check your connection';
+    resetBtn();
+  };
+
+  xhr.send(JSON.stringify({
+    name, phone, password: pass, role: 'driver', vehicleType: vehicle,
+    vehicleModel, vehiclePlate, profilePhoto, licensePhoto, cnicFront, cnicBack
+  }));
 }
 
 // ── Driver Forgot Password ──────────────────────────────────────────────────
@@ -890,6 +919,7 @@ function bootApp() {
   connectSocket();
   loadStats();
   checkUnreadDriverTickets();
+  checkDailyFee();
   // Request notification permission then register Web Push subscription
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission().then(perm => {
@@ -1245,6 +1275,22 @@ function showRideRequest(ride) {
 
   showRideOnMap(ride);
   startRideAlert(ride);
+
+  // Grey out Accept button if today's platform fee is not yet paid
+  const acceptBtn = document.querySelector('.btn-accept');
+  if (acceptBtn) {
+    if (dailyFeeDue) {
+      acceptBtn.disabled = true;
+      acceptBtn.textContent = '💳 Pay Daily Fee to Accept';
+      acceptBtn.style.opacity = '0.5';
+      acceptBtn.style.cursor  = 'not-allowed';
+    } else {
+      acceptBtn.disabled = false;
+      acceptBtn.textContent = '✓ Accept';
+      acceptBtn.style.opacity = '';
+      acceptBtn.style.cursor  = '';
+    }
+  }
 }
 
 function hideRideRequest() {
@@ -1789,6 +1835,212 @@ else if (token && user && user.role !== 'driver') {
     </div>
   </div>
 </div>
+
+<!-- ── Upload Progress Overlay ───────────────────────────────────────────── -->
+<div id="upload-progress-screen" style="display:none;position:fixed;inset:0;background:#0a0a0f;z-index:1100;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center">
+  <div style="font-size:3.5rem;margin-bottom:1rem">📤</div>
+  <h2 style="color:#f5c518;margin:0 0 .35rem;font-size:1.25rem">Uploading Documents</h2>
+  <p style="color:#666;font-size:.83rem;margin-bottom:2rem;max-width:280px">Please wait while your files are uploading to our servers…</p>
+  <div style="width:280px;background:#1a1a2a;border-radius:999px;height:14px;overflow:hidden;margin-bottom:.75rem">
+    <div id="upload-progress-bar" style="height:100%;background:linear-gradient(90deg,#f5c518,#ff9900);border-radius:999px;transition:width .25s ease;width:0%"></div>
+  </div>
+  <div id="upload-progress-pct" style="color:#f5c518;font-size:1.5rem;font-weight:700;margin-bottom:.4rem">0%</div>
+  <p style="color:#333;font-size:.7rem">Do not close this page</p>
+</div>
+
+<!-- ── Daily Platform Fee Modal (non-dismissable) ───────────────────────── -->
+<div id="daily-fee-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:3000;align-items:center;justify-content:center">
+  <div style="background:#1a1a2a;border:2px solid #f5c518;border-radius:16px;padding:1.75rem;max-width:360px;width:92%;margin:auto">
+    <div style="font-size:2.5rem;text-align:center;margin-bottom:.4rem">💳</div>
+    <h3 style="color:#f5c518;text-align:center;margin:0 0 .4rem;font-size:1.1rem">Daily Platform Fee Due</h3>
+    <p style="color:#aaa;font-size:.82rem;text-align:center;margin-bottom:1.25rem">Pay <strong style="color:#fff">Rs <span id="dfee-amount">200</span></strong> to activate ride acceptance for today.</p>
+    <div style="background:#0d0d1a;border-radius:10px;padding:.9rem;margin-bottom:.9rem;font-size:.78rem;color:#777;line-height:1.7">
+      Send via JazzCash / EasyPaisa to:<br>
+      <span id="dfee-accounts" style="color:#f5c518">Loading payment details…</span>
+    </div>
+    <input type="text" id="dfee-trx" placeholder="Paste TRX / Transaction ID here" style="width:100%;padding:.75rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.4rem;box-sizing:border-box;font-size:.875rem">
+    <p id="dfee-err" style="color:#ff4444;font-size:.77rem;min-height:1em;margin-bottom:.6rem"></p>
+    <button id="dfee-submit-btn" onclick="submitDailyFee()" style="width:100%;padding:.85rem;border-radius:8px;border:none;background:#f5c518;color:#000;font-weight:700;font-size:.95rem;cursor:pointer">✓ Submit Payment &amp; Activate</button>
+    <p style="color:#444;font-size:.7rem;text-align:center;margin-top:.6rem">Submission is instant. Admin verifies within minutes.</p>
+  </div>
+</div>
+
+<!-- ── Change Phone Modal ─────────────────────────────────────────────────── -->
+<div id="change-phone-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2100;align-items:center;justify-content:center">
+  <div style="background:#1a1a2a;border:1px solid #2a2a4a;border-radius:16px;padding:1.5rem;max-width:340px;width:90%;margin:auto">
+    <h3 style="color:#f5c518;margin:0 0 1rem;font-size:1rem">📱 Change Phone Number</h3>
+    <input type="password" id="cp-phone-current" placeholder="Current password" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.5rem;box-sizing:border-box;font-size:.875rem">
+    <input type="tel" id="cp-phone-new" placeholder="New phone number" inputmode="tel" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.4rem;box-sizing:border-box;font-size:.875rem">
+    <p id="cp-phone-err" style="color:#ff4444;font-size:.78rem;min-height:1em;margin-bottom:.5rem"></p>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="closeChangePhoneModal()" style="flex:1;padding:.7rem;border-radius:8px;border:1px solid #333;background:#1a1a2a;color:#aaa;cursor:pointer;font-size:.85rem">Cancel</button>
+      <button id="cp-phone-btn" onclick="submitChangePhone()" style="flex:1;padding:.7rem;border-radius:8px;border:none;background:#f5c518;color:#000;font-weight:600;cursor:pointer;font-size:.85rem">Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Change Password Modal ──────────────────────────────────────────────── -->
+<div id="change-password-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2100;align-items:center;justify-content:center">
+  <div style="background:#1a1a2a;border:1px solid #2a2a4a;border-radius:16px;padding:1.5rem;max-width:340px;width:90%;margin:auto">
+    <h3 style="color:#f5c518;margin:0 0 1rem;font-size:1rem">🔑 Change Password</h3>
+    <input type="password" id="cp-pass-current" placeholder="Current password" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.5rem;box-sizing:border-box;font-size:.875rem">
+    <input type="password" id="cp-pass-new" placeholder="New password (min 6 characters)" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.4rem;box-sizing:border-box;font-size:.875rem">
+    <p id="cp-pass-err" style="color:#ff4444;font-size:.78rem;min-height:1em;margin-bottom:.5rem"></p>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="closeChangePasswordModal()" style="flex:1;padding:.7rem;border-radius:8px;border:1px solid #333;background:#1a1a2a;color:#aaa;cursor:pointer;font-size:.85rem">Cancel</button>
+      <button id="cp-pass-btn" onclick="submitChangePassword()" style="flex:1;padding:.7rem;border-radius:8px;border:none;background:#f5c518;color:#000;font-weight:600;cursor:pointer;font-size:.85rem">Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Change Vehicle Info Modal ──────────────────────────────────────────── -->
+<div id="change-vehicle-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2100;align-items:center;justify-content:center">
+  <div style="background:#1a1a2a;border:1px solid #2a2a4a;border-radius:16px;padding:1.5rem;max-width:340px;width:90%;margin:auto">
+    <h3 style="color:#f5c518;margin:0 0 1rem;font-size:1rem">🚗 Change Vehicle Info</h3>
+    <input type="password" id="cv-current" placeholder="Current password" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.5rem;box-sizing:border-box;font-size:.875rem">
+    <input type="text" id="cv-model" placeholder="Vehicle model (e.g. Suzuki Cultus 2022)" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.5rem;box-sizing:border-box;font-size:.875rem">
+    <input type="text" id="cv-plate" placeholder="Number plate (e.g. LHR-1234)" style="width:100%;padding:.7rem;border-radius:8px;border:1px solid #333;background:#0d0d1a;color:#fff;margin-bottom:.4rem;box-sizing:border-box;font-size:.875rem;text-transform:uppercase">
+    <p id="cv-err" style="color:#ff4444;font-size:.78rem;min-height:1em;margin-bottom:.5rem"></p>
+    <div style="display:flex;gap:.5rem">
+      <button onclick="closeChangeVehicleModal()" style="flex:1;padding:.7rem;border-radius:8px;border:1px solid #333;background:#1a1a2a;color:#aaa;cursor:pointer;font-size:.85rem">Cancel</button>
+      <button id="cv-btn" onclick="submitChangeVehicle()" style="flex:1;padding:.7rem;border-radius:8px;border:none;background:#f5c518;color:#000;font-weight:600;cursor:pointer;font-size:.85rem">Update</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Upload Progress ────────────────────────────────────────────────────────
+function showUploadProgress() { document.getElementById('upload-progress-screen').style.display = 'flex'; }
+function hideUploadProgress() { document.getElementById('upload-progress-screen').style.display = 'none'; }
+function setUploadProgress(pct) {
+  const bar = document.getElementById('upload-progress-bar');
+  const txt = document.getElementById('upload-progress-pct');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) txt.textContent = pct + '%';
+}
+
+// ── Daily Platform Fee ─────────────────────────────────────────────────────
+function checkDailyFee() {
+  if (!user || user.role !== 'driver') return;
+  const lastPaid  = user.lastDailyFeePaidAt ? new Date(user.lastDailyFeePaidAt) : null;
+  const ago24h    = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  if (!lastPaid || lastPaid < ago24h) {
+    dailyFeeDue = true;
+    const amtEl = document.getElementById('dfee-amount');
+    if (amtEl) amtEl.textContent = user.dailyFeeAmount || 200;
+    fetch('/api/settings/payment').then(r => r.json()).then(d => {
+      const accs  = d.accounts || {};
+      const lines = Object.entries(accs).map(([k, v]) => `${k}: ${v.number || v}`).join('  ·  ');
+      const el = document.getElementById('dfee-accounts');
+      if (el) el.textContent = lines || 'Contact admin for payment details';
+    }).catch(() => {});
+    const modal = document.getElementById('daily-fee-modal');
+    if (modal) modal.style.display = 'flex';
+  }
+}
+
+async function submitDailyFee() {
+  const trxId = document.getElementById('dfee-trx').value.trim();
+  const errEl = document.getElementById('dfee-err');
+  const btn   = document.getElementById('dfee-submit-btn');
+  if (!trxId) { errEl.textContent = 'TRX ID is required'; return; }
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = '⏳ Submitting…';
+  try {
+    const amount = user?.dailyFeeAmount || 200;
+    await apiCall('/api/payments/submit', 'POST', { trxId, amount, paymentType: 'jazzcash' });
+    dailyFeeDue = false;
+    user.lastDailyFeePaidAt = new Date().toISOString();
+    localStorage.setItem('rh_user', JSON.stringify(user));
+    document.getElementById('daily-fee-modal').style.display = 'none';
+    showToast('✅ Daily fee submitted! Ride acceptance is now active.', 'success');
+    // Re-enable accept button immediately if a ride popup is open
+    const acceptBtn = document.querySelector('.btn-accept');
+    if (acceptBtn && pendingRide) {
+      acceptBtn.disabled = false; acceptBtn.textContent = '✓ Accept';
+      acceptBtn.style.opacity = ''; acceptBtn.style.cursor = '';
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    btn.disabled = false; btn.textContent = '✓ Submit Payment & Activate';
+  }
+}
+
+// ── Profile Update Helpers ─────────────────────────────────────────────────
+async function profileUpdate(payload, modalId) {
+  try {
+    const res = await apiCall('/api/user/update-profile', 'POST', payload);
+    if (res.user) { user = { ...user, ...res.user }; localStorage.setItem('rh_user', JSON.stringify(user)); }
+    document.getElementById(modalId).style.display = 'none';
+    showToast('✅ ' + res.message, 'success');
+    return null;
+  } catch (e) { return e.message; }
+}
+
+// Change Phone
+function openChangePhoneModal() {
+  ['cp-phone-current','cp-phone-new'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('cp-phone-err').textContent = '';
+  const btn = document.getElementById('cp-phone-btn'); if (btn) { btn.disabled = false; btn.textContent = 'Update'; }
+  document.getElementById('change-phone-modal').style.display = 'flex';
+}
+function closeChangePhoneModal() { document.getElementById('change-phone-modal').style.display = 'none'; }
+async function submitChangePhone() {
+  const currentPassword = document.getElementById('cp-phone-current').value;
+  const newPhone        = document.getElementById('cp-phone-new').value.trim();
+  const errEl = document.getElementById('cp-phone-err');
+  const btn   = document.getElementById('cp-phone-btn');
+  if (!currentPassword) { errEl.textContent = 'Current password is required'; return; }
+  if (!newPhone)        { errEl.textContent = 'New phone number is required';  return; }
+  btn.disabled = true; btn.textContent = 'Updating…'; errEl.textContent = '';
+  const err = await profileUpdate({ currentPassword, newPhone }, 'change-phone-modal');
+  if (err) { errEl.textContent = err; btn.disabled = false; btn.textContent = 'Update'; }
+}
+
+// Change Password
+function openChangePasswordModal() {
+  ['cp-pass-current','cp-pass-new'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('cp-pass-err').textContent = '';
+  const btn = document.getElementById('cp-pass-btn'); if (btn) { btn.disabled = false; btn.textContent = 'Update'; }
+  document.getElementById('change-password-modal').style.display = 'flex';
+}
+function closeChangePasswordModal() { document.getElementById('change-password-modal').style.display = 'none'; }
+async function submitChangePassword() {
+  const currentPassword = document.getElementById('cp-pass-current').value;
+  const newPassword     = document.getElementById('cp-pass-new').value;
+  const errEl = document.getElementById('cp-pass-err');
+  const btn   = document.getElementById('cp-pass-btn');
+  if (!currentPassword)       { errEl.textContent = 'Current password is required'; return; }
+  if (newPassword.length < 6) { errEl.textContent = 'New password must be at least 6 characters'; return; }
+  btn.disabled = true; btn.textContent = 'Updating…'; errEl.textContent = '';
+  const err = await profileUpdate({ currentPassword, newPassword }, 'change-password-modal');
+  if (err) { errEl.textContent = err; btn.disabled = false; btn.textContent = 'Update'; }
+}
+
+// Change Vehicle Info
+function openChangeVehicleModal() {
+  document.getElementById('cv-current').value = '';
+  document.getElementById('cv-model').value   = user?.vehicleModel || '';
+  document.getElementById('cv-plate').value   = user?.vehiclePlate || '';
+  document.getElementById('cv-err').textContent = '';
+  const btn = document.getElementById('cv-btn'); if (btn) { btn.disabled = false; btn.textContent = 'Update'; }
+  document.getElementById('change-vehicle-modal').style.display = 'flex';
+}
+function closeChangeVehicleModal() { document.getElementById('change-vehicle-modal').style.display = 'none'; }
+async function submitChangeVehicle() {
+  const currentPassword = document.getElementById('cv-current').value;
+  const vehicleModel    = document.getElementById('cv-model').value.trim();
+  const vehiclePlate    = document.getElementById('cv-plate').value.trim();
+  const errEl = document.getElementById('cv-err');
+  const btn   = document.getElementById('cv-btn');
+  if (!currentPassword) { errEl.textContent = 'Current password is required'; return; }
+  if (!vehicleModel)    { errEl.textContent = 'Vehicle model is required';     return; }
+  if (!vehiclePlate)    { errEl.textContent = 'Number plate is required';      return; }
+  btn.disabled = true; btn.textContent = 'Updating…'; errEl.textContent = '';
+  const err = await profileUpdate({ currentPassword, vehicleModel, vehiclePlate }, 'change-vehicle-modal');
+  if (err) { errEl.textContent = err; btn.disabled = false; btn.textContent = 'Update'; }
+}
+</script>
 
 <!-- ── Delete Account Modal ──────────────────────────────────────────────── -->
 <div id="delete-account-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2000;align-items:center;justify-content:center">

@@ -136,6 +136,9 @@ const userSchema = new mongoose.Schema({
   suspendReason:   { type: String, default: '' },
   suspendedAt:     { type: Date,   default: null },
   activeSessionToken: { type: String, default: null },   // single-device login enforcement
+  // Daily platform fee tracking
+  lastDailyFeePaidAt: { type: Date,   default: null },
+  dailyFeeAmount:     { type: Number, default: 200  },
   // Driver verification documents (URL strings)
   profilePhoto:    { type: String, default: '' },
   cnicFront:       { type: String, default: '' },
@@ -192,8 +195,10 @@ const rideSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const walletSchema = new mongoose.Schema({
-  user:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', unique: true },
-  balance: { type: Number, default: 0 },
+  user:           { type: mongoose.Schema.Types.ObjectId, ref: 'User', unique: true },
+  balance:        { type: Number, default: 0 },             // net spendable (all credits − debits)
+  realCashWallet: { type: Number, default: 0 },             // deposits + ride earnings only
+  bonusWallet:    { type: Number, default: 0 },             // promotional bonuses only
   transactions: [{
     amount:        Number,
     type:          { type: String, enum: ['credit', 'debit'] },
@@ -364,7 +369,8 @@ app.post('/api/auth/register', async (req, res) => {
       user: { id: user._id, name: user.name, email: user.email || '', phone: user.phone,
               role: user.role, accountStatus: user.accountStatus,
               vehicleType: user.vehicleType,
-              vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate }
+              vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate,
+              lastDailyFeePaidAt: null, dailyFeeAmount: 200 }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -401,7 +407,9 @@ app.post('/api/auth/login', async (req, res) => {
               role: user.role, accountStatus: user.accountStatus,
               profilePhoto: user.profilePhoto || '',
               vehicleType: user.vehicleType,
-              vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate, rating: user.rating }
+              vehicleModel: user.vehicleModel, vehiclePlate: user.vehiclePlate, rating: user.rating,
+              lastDailyFeePaidAt: user.lastDailyFeePaidAt || null,
+              dailyFeeAmount: user.dailyFeeAmount || 200 }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -686,7 +694,7 @@ app.patch('/api/rides/:id/status', authMiddleware, async (req, res) => {
       const earnings = +(ride.fare * 0.85).toFixed(2);
       await Wallet.updateOne(
         { user: ride.driver },
-        { $inc: { balance: earnings },
+        { $inc: { balance: earnings, realCashWallet: earnings },   // ride earnings → realCashWallet
           $push: { transactions: { amount: earnings, type: 'credit', description: 'Ride earnings' } } },
         { upsert: true }
       );
@@ -830,6 +838,41 @@ app.patch('/api/rides/:id/update-fare', authMiddleware, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Profile Update (phone, password, vehicle) with current-password verification ─
+app.post('/api/user/update-profile', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPhone, newPassword, vehicleModel, vehiclePlate } = req.body;
+    if (!currentPassword) return res.status(400).json({ error: 'Current password is required' });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) return res.status(401).json({ error: 'Incorrect current password' });
+
+    const updates = {};
+    if (newPhone && newPhone !== user.phone) {
+      const clash = await User.findOne({ phone: newPhone, _id: { $ne: user._id } });
+      if (clash) return res.status(409).json({ error: 'That phone number is already registered to another account' });
+      updates.phone = newPhone.trim();
+    }
+    if (newPassword) {
+      if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+      updates.password = await bcrypt.hash(newPassword, 10);
+    }
+    if (vehicleModel) updates.vehicleModel = vehicleModel.trim();
+    if (vehiclePlate) updates.vehiclePlate = vehiclePlate.trim().toUpperCase();
+
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'No changes provided' });
+
+    await User.updateOne({ _id: user._id }, updates);
+    const updated = await User.findById(user._id).select('name phone email vehicleModel vehiclePlate vehicleType');
+    res.json({ message: 'Profile updated successfully', user: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Wallet Routes
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -852,7 +895,7 @@ app.post('/api/wallet/add-funds', authMiddleware, async (req, res) => {
     const pmLabel = PM_LABELS[paymentMethod] || 'Wallet top-up';
     const wallet = await Wallet.findOneAndUpdate(
       { user: req.user.id },
-      { $inc: { balance: amount },
+      { $inc: { balance: amount, realCashWallet: amount },   // deposits → realCashWallet
         $push: { transactions: {
           amount, type: 'credit',
           description: `Top-up via ${pmLabel}`,
@@ -912,6 +955,9 @@ app.post('/api/payments/submit', authMiddleware, async (req, res) => {
       vehicleCategory: driver.vehicleType || 'Car Mini',
       submittedDate:   dateStr
     });
+
+    // Mark daily fee as paid immediately upon TRX submission (unlocks ride acceptance)
+    await User.updateOne({ _id: req.user.id }, { lastDailyFeePaidAt: new Date() }).catch(() => {});
 
     res.status(201).json(payment);
   } catch (err) {
@@ -1390,7 +1436,10 @@ app.get('/api/wallet/summary', authMiddleware, async (req, res) => {
     // Today's payment submission
     const todayPayment = await Payment.findOne({ driver: req.user.id, submittedDate: todayUTC() });
 
-    res.json({ balance, monthlyFee, totalBonus, vehicleType, ledger, todayPayment: todayPayment || null });
+    const realCashWallet = wallet?.realCashWallet || 0;
+    const bonusWalletAmt = wallet?.bonusWallet    || 0;
+    res.json({ balance, monthlyFee, totalBonus, vehicleType, ledger, todayPayment: todayPayment || null,
+               realCashWallet, bonusWallet: bonusWalletAmt });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1470,7 +1519,7 @@ app.post('/api/admin/drivers/grant-trial', adminJwt, async (req, res) => {
       const amount = TRIAL_AMOUNTS[driver.vehicleType] || 4500;
       await Wallet.findOneAndUpdate(
         { user: driver._id },
-        { $inc: { balance: amount },
+        { $inc: { balance: amount, bonusWallet: amount },   // bonus credited to bonusWallet only (not realCashWallet)
           $push: { transactions: { amount, type: 'credit', description: '1-Month Promotional Bonus Credit' } } },
         { upsert: true, new: true }
       );
