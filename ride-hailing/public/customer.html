@@ -613,6 +613,13 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
       <div class="matched-pay-row" id="ar-payment">—</div>
     </div>
 
+    <!-- Ride Verification PIN (shown after driver accepts) -->
+    <div id="ar-pin-card" style="display:none;background:#0a1a0a;border:1.5px solid #22c55e;border-radius:10px;padding:.75rem 1rem;margin-bottom:.75rem;text-align:center">
+      <div style="font-size:.7rem;color:#22c55e;font-weight:700;letter-spacing:.07em;margin-bottom:.3rem">🔐 YOUR RIDE PIN — share with driver</div>
+      <div id="ar-pin-value" style="font-size:2.4rem;font-weight:900;letter-spacing:.5em;color:#22c55e;font-family:monospace;line-height:1.1">—</div>
+      <div style="font-size:.7rem;color:#475569;margin-top:.3rem">Driver must enter this PIN to start the ride</div>
+    </div>
+
     <div class="contact-btns" id="ar-contact-btns">
       <!-- populated by JS after driver phone is known -->
     </div>
@@ -944,9 +951,13 @@ function initMap() {
 
   map.on('click', (e) => {
     const { lat, lng } = e.latlng;
-    if (mapMode === 'pickup') setPickup(lat, lng);
-    else if (mapMode === 'stop-0') setStop(0, lat, lng);
-    // additional stops require search — map-tap only works for pickup & first drop
+    if (mapMode === 'pickup') {
+      setPickup(lat, lng);
+    } else if (mapMode.startsWith('stop-')) {
+      // Support map-tap for any active stop slot (stop-0 through stop-3)
+      const idx = parseInt(mapMode.split('-')[1], 10);
+      setStop(idx, lat, lng);
+    }
   });
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(pos => {
@@ -1006,7 +1017,9 @@ function renderDropdown(type, results) {
   dd.innerHTML = results.map(item => {
     const { primary, secondary } = buildLabel(item);
     const safePrimary = JSON.stringify(primary);
+    // pointerdown fires before blur on all devices; mousedown + touchstart for compat
     return `<div class="loc-item"
+        onpointerdown="pickFromSearch(event,'${type}',${item.lat},${item.lon},${safePrimary})"
         onmousedown="pickFromSearch(event,'${type}',${item.lat},${item.lon},${safePrimary})"
         ontouchstart="pickFromSearch(event,'${type}',${item.lat},${item.lon},${safePrimary})">
       <div class="loc-primary">${primary}</div>
@@ -1058,8 +1071,10 @@ function onLocFocus(type) {
 }
 
 function onLocBlur(type) {
-  // Delay long enough for mousedown/touchstart on a dropdown item to fire first
-  setTimeout(() => closeDropdown(type), 350);
+  // Delay must exceed the 380 ms search debounce so the dropdown stays open
+  // long enough for the user to see and tap results.  600 ms also covers
+  // the mousedown / touchstart / pointerdown handlers on dropdown items.
+  setTimeout(() => closeDropdown(type), 600);
 }
 
 // ── Set Locations ─────────────────────────────────────────────────────────
@@ -1216,8 +1231,15 @@ function selectVehicle(btn) {
 // ── Add / Remove Stops ───────────────────────────────────────────────────
 function addStop() {
   if (activeStops >= 4) return showToast('Maximum 4 drop stops', 'info');
-  document.getElementById(`stop-wrap-${activeStops}`).style.display = 'block';
+  const newIdx = activeStops;
+  document.getElementById(`stop-wrap-${newIdx}`).style.display = 'block';
   activeStops++;
+  // Point map-tap at this new stop so the user can place it by tapping the map
+  mapMode = `stop-${newIdx}`;
+  const hint = document.getElementById('map-hint');
+  hint.textContent = `Tap map to set Drop ${newIdx + 1}, or search below`;
+  hint.className   = 'map-hint dropoff-mode';
+  hint.style.display = 'block';
   document.getElementById('add-stop-btn').style.display = activeStops >= 4 ? 'none' : 'flex';
 }
 
@@ -1417,6 +1439,9 @@ async function cancelRide() {
 function endRide() {
   activeRide = null; routeDistanceKm = null; offeredFare = 0;
   activeLiveFare = 0; driverOffers = []; activeDriverInfo = null;
+  // Hide PIN card and reset it for the next ride
+  const pinCard = document.getElementById('ar-pin-card');
+  if (pinCard) { pinCard.style.display = 'none'; document.getElementById('ar-pin-value').textContent = '—'; }
   document.getElementById('active-ride').style.display = 'none';
   document.getElementById('ar-waiting').style.display = 'block';
   document.getElementById('ar-matched').style.display = 'none';
@@ -1508,10 +1533,15 @@ function connectToRideRoom(rideId) {
   });
 
   // Customer selected a driver — full driver profile arrives here
-  socket.on('ride:accepted', ({ driver, rideId: acceptedRideId }) => {
+  socket.on('ride:accepted', ({ driver, rideId: acceptedRideId, verificationPin }) => {
     if (activeRide && String(activeRide._id) === String(acceptedRideId)) {
       activeDriverInfo = driver;
       showMatchedPanel(driver, activeRide.fare);
+      // Display verification PIN so customer can share it with driver
+      if (verificationPin) {
+        document.getElementById('ar-pin-card').style.display = 'block';
+        document.getElementById('ar-pin-value').textContent  = verificationPin;
+      }
       showToast(`${driver.name} is on the way!`, 'success');
     }
   });

@@ -190,8 +190,11 @@ const rideSchema = new mongoose.Schema({
     type:         { type: String, enum: ['accept', 'counter'], default: 'accept' },
     timestamp:    { type: Date, default: Date.now }
   }],
-  driverRating: { type: Number, default: null },
-  driverReview: { type: String,  default: '' }
+  driverRating:    { type: Number, default: null },
+  driverReview:    { type: String,  default: '' },
+  customerRating:  { type: Number, default: null },
+  customerReview:  { type: String,  default: '' },
+  verificationPin: { type: String,  default: null }   // 4-digit PIN for ride start
 }, { timestamps: true });
 
 const walletSchema = new mongoose.Schema({
@@ -641,10 +644,16 @@ app.patch('/api/rides/:id/accept', authMiddleware, async (req, res) => {
 
     if (!ride) return res.status(409).json({ error: 'Ride no longer available' });
 
+    // Generate 4-digit verification PIN for ride start
+    const verificationPin = String(Math.floor(1000 + Math.random() * 9000));
+    ride.verificationPin = verificationPin;
+    await ride.save();
+
     // Fetch full driver profile for the acceptance payload
     const driverUser = await User.findById(req.user.id).select('name phone vehicleType vehicleModel vehiclePlate rating profilePhoto');
     io.to(`ride:${ride._id}`).emit('ride:accepted', {
       rideId: ride._id,
+      verificationPin,
       driver: {
         id:           req.user.id,
         name:         driverUser.name,
@@ -680,6 +689,16 @@ app.patch('/api/rides/:id/status', authMiddleware, async (req, res) => {
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: `Cannot transition from "${ride.status}" to "${status}"` });
     }
+
+    // Validate verification PIN before starting the ride
+    if (ride.status === 'arrived' && status === 'in-progress') {
+      const { pin } = req.body;
+      if (!pin) return res.status(400).json({ error: 'PIN_REQUIRED' });
+      if (String(pin).trim() !== String(ride.verificationPin)) {
+        return res.status(400).json({ error: 'WRONG_PIN' });
+      }
+    }
+
     ride.status = status;
     await ride.save();
 
@@ -787,12 +806,17 @@ app.patch('/api/rides/:id/accept-driver', authMiddleware, async (req, res) => {
     const offer = ride.counterOffers.find(o => String(o.driver) === String(driverId));
     if (offer && offer.price && offer.price !== ride.fare) {
       ride.fare = offer.price;
-      await ride.save();
     }
+
+    // Generate 4-digit verification PIN for ride start
+    const verificationPin = String(Math.floor(1000 + Math.random() * 9000));
+    ride.verificationPin = verificationPin;
+    await ride.save();
 
     const driverUser = await User.findById(driverId).select('name phone vehicleType vehicleModel vehiclePlate rating profilePhoto');
     io.to(`ride:${ride._id}`).emit('ride:accepted', {
       rideId: ride._id,
+      verificationPin,
       driver: {
         id:           String(driverId),
         name:         driverUser.name,
@@ -1380,6 +1404,29 @@ app.patch('/api/rides/:id/review', authMiddleware, async (req, res) => {
       const ratings = await Ride.find({ driver: ride.driver, driverRating: { $ne: null } }).select('driverRating');
       const avg = ratings.reduce((s, r) => s + r.driverRating, 0) / ratings.length;
       await User.updateOne({ _id: ride.driver }, { rating: +avg.toFixed(1), $inc: { totalRides: 0 } });
+    }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PATCH /api/rides/:id/review-passenger — driver rates the customer after completion
+app.patch('/api/rides/:id/review-passenger', authMiddleware, async (req, res) => {
+  try {
+    const { rating, review } = req.body;
+    if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1–5' });
+    const ride = await Ride.findById(req.params.id);
+    if (!ride) return res.status(404).json({ error: 'Ride not found' });
+    if (String(ride.driver) !== String(req.user.id)) return res.status(403).json({ error: 'Not your ride' });
+    if (ride.status !== 'completed') return res.status(400).json({ error: 'Ride not completed' });
+    if (ride.customerRating !== null) return res.status(409).json({ error: 'Already reviewed' });
+    ride.customerRating = Number(rating);
+    ride.customerReview = (review || '').trim();
+    await ride.save();
+    // Update passenger average rating
+    if (ride.passenger) {
+      const ratings = await Ride.find({ passenger: ride.passenger, customerRating: { $ne: null } }).select('customerRating');
+      const avg = ratings.reduce((s, r) => s + r.customerRating, 0) / ratings.length;
+      await User.updateOne({ _id: ride.passenger }, { rating: +avg.toFixed(1) });
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
