@@ -197,6 +197,26 @@ input[type=date]:focus{border-color:#f5c518}
 ::-webkit-scrollbar-track{background:#06060e}
 ::-webkit-scrollbar-thumb{background:#1e1e2e;border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:#334155}
+
+/* ── Auth login type tabs ── */
+.auth-tabs{display:flex;border:1px solid #1e1e3a;border-radius:12px;overflow:hidden;margin-bottom:1.5rem}
+.auth-tab{flex:1;padding:.5rem;font-size:.78rem;font-weight:700;cursor:pointer;background:transparent;border:none;color:#475569;transition:all .15s;text-align:center}
+.auth-tab.active{background:#f5c518;color:#06060e}
+
+/* ── Sub-Admin section ── */
+.sa-counter{font-size:.78rem;color:#475569;background:#0a0a14;border:1px solid #1e1e2e;border-radius:8px;padding:.3rem .75rem;margin-left:auto}
+.sa-counter span{color:#f5c518;font-weight:800}
+.sa-table th,.sa-table td{padding:.6rem .85rem}
+.perm-chip{display:inline-flex;align-items:center;gap:.2rem;font-size:.65rem;font-weight:700;padding:.18rem .5rem;border-radius:100px;margin:.1rem;white-space:nowrap}
+.perm-on{background:#052a10;color:#22c55e;border:1px solid #0a3a18}
+.perm-off{background:#0f0f18;color:#334155;border:1px solid #1e1e2e}
+
+/* ── Permission checkbox grid ── */
+.perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.75rem}
+.perm-row{display:flex;align-items:center;gap:.5rem;background:#06060e;border:1px solid #1e1e2e;border-radius:8px;padding:.5rem .7rem;cursor:pointer;transition:border-color .15s}
+.perm-row:hover{border-color:#334155}
+.perm-row input[type=checkbox]{width:15px;height:15px;accent-color:#f5c518;cursor:pointer}
+.perm-row label{font-size:.78rem;color:#94a3b8;cursor:pointer;user-select:none}
 </style>
 </head>
 <body>
@@ -206,9 +226,22 @@ input[type=date]:focus{border-color:#f5c518}
   <div class="auth-box">
     <div class="auth-logo">My<span>Ride</span></div>
     <p class="auth-subtitle">Admin Control Panel</p>
-    <div class="form-group"><label>Admin Email</label><input type="email" id="a-email" placeholder="admin@myride.com" value="admin@myride.com"></div>
-    <div class="form-group"><label>Password</label><input type="password" id="a-pass" placeholder="••••••••" value="admin1234"></div>
-    <button class="btn-admin-login" onclick="adminLogin()">Sign In as Admin</button>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-superadmin" onclick="switchAuthTab('superadmin')">Super Admin</button>
+      <button class="auth-tab"        id="tab-subadmin"   onclick="switchAuthTab('subadmin')">Sub-Admin</button>
+    </div>
+    <!-- Super-admin form -->
+    <div id="auth-form-superadmin">
+      <div class="form-group"><label>Admin Email</label><input type="email" id="a-email" placeholder="admin@myride.com" value="admin@myride.com"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="a-pass" placeholder="••••••••" value="admin1234"></div>
+      <button class="btn-admin-login" onclick="adminLogin()">Sign In as Super Admin</button>
+    </div>
+    <!-- Sub-admin form -->
+    <div id="auth-form-subadmin" style="display:none">
+      <div class="form-group"><label>Username</label><input type="text" id="sa-username" placeholder="sub_admin_1"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="sa-pass" placeholder="••••••••"></div>
+      <button class="btn-admin-login" onclick="subAdminLogin()">Sign In as Sub-Admin</button>
+    </div>
     <div class="auth-err" id="a-err"></div>
   </div>
 </div>
@@ -234,6 +267,7 @@ input[type=date]:focus{border-color:#f5c518}
       <div class="sb-item"        onclick="showSection('pay-settings')" data-sec="pay-settings"><span class="sb-icon">⚙️</span> Payment Settings</div>
       <div class="sb-item"        onclick="showSection('ratings')"      data-sec="ratings">      <span class="sb-icon">⭐</span> Ratings & Feedback</div>
       <div class="sb-item"        onclick="showSection('support')"      data-sec="support">      <span class="sb-icon">🎫</span> Support Tickets <span class="sb-badge-count" id="sup-cnt" style="display:none">0</span></div>
+      <div class="sb-item" id="sb-sub-admins" onclick="showSection('sub-admins')" data-sec="sub-admins"><span class="sb-icon">👤</span> Sub-Admin Users</div>
     </div>
     <div class="sb-footer">
       <div id="admin-email-lbl">—</div>
@@ -509,12 +543,88 @@ input[type=date]:focus{border-color:#f5c518}
         <div id="support-list"><div class="loading-row">Loading…</div></div>
       </div>
 
+      <!-- ════ 13. SUB-ADMIN USERS ════ -->
+      <div class="section-panel" id="sec-sub-admins">
+        <div class="sec-hdr">
+          <h2>👤 Sub-Admin User Management</h2>
+          <div class="sec-hdr-actions">
+            <span class="sa-counter">Active: <span id="sa-count">0</span> / 50</span>
+            <button class="btn btn-primary" onclick="openCreateSubAdmin()">+ Create Sub-Admin</button>
+            <button class="btn-refresh" onclick="loadSubAdmins()">↻</button>
+          </div>
+        </div>
+        <p style="font-size:.78rem;color:#475569;margin-bottom:1rem">
+          Sub-admins can log in with a username &amp; password and can only perform actions their permissions allow. Up to 50 accounts can exist.
+        </p>
+        <div class="table-wrap">
+          <table class="data-table sa-table">
+            <thead><tr><th>Username</th><th>Approve Drivers</th><th>Block Drivers</th><th>Block Customers</th><th>Manage Wallets</th><th>View Rides</th><th>Created</th><th>Actions</th></tr></thead>
+            <tbody id="sa-tbody"><tr><td colspan="8" class="loading-row">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
     </div><!-- /content-area -->
   </div><!-- /main -->
 </div><!-- /admin-app -->
 
 <!-- ── SOS Flash Overlay ── -->
 <div id="sos-flash"></div>
+
+<!-- ── Create Sub-Admin Modal ── -->
+<div class="modal-backdrop" id="sa-create-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">👤 Create Sub-Admin</div>
+      <button class="btn-close" onclick="closeModal('sa-create-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field-item"><div class="field-label">Username</div><input class="modal-input" id="sa-new-username" type="text" placeholder="e.g. support_1"></div>
+        <div class="field-item"><div class="field-label">Password</div><input class="modal-input" id="sa-new-password" type="password" placeholder="••••••••"></div>
+      </div>
+      <div style="font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin:.75rem 0 .4rem">Permissions</div>
+      <div class="perm-grid">
+        <label class="perm-row"><input type="checkbox" id="pn-approveDrivers"><label for="pn-approveDrivers">Approve Drivers</label></label>
+        <label class="perm-row"><input type="checkbox" id="pn-blockDrivers"><label for="pn-blockDrivers">Block Drivers</label></label>
+        <label class="perm-row"><input type="checkbox" id="pn-blockCustomers"><label for="pn-blockCustomers">Block Customers</label></label>
+        <label class="perm-row"><input type="checkbox" id="pn-manageWallets"><label for="pn-manageWallets">Manage Wallets</label></label>
+        <label class="perm-row"><input type="checkbox" id="pn-viewRides" checked><label for="pn-viewRides">View Rides</label></label>
+      </div>
+      <div id="sa-create-err" style="color:#ef4444;font-size:.78rem;margin-top:.6rem;min-height:1em"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('sa-create-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createSubAdmin()">Create Sub-Admin</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Sub-Admin Permissions Modal ── -->
+<div class="modal-backdrop" id="sa-edit-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="sa-edit-title">✏️ Edit Permissions</div>
+      <button class="btn-close" onclick="closeModal('sa-edit-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sa-edit-id">
+      <div style="font-size:.78rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Permissions</div>
+      <div class="perm-grid">
+        <label class="perm-row"><input type="checkbox" id="pe-approveDrivers"><label for="pe-approveDrivers">Approve Drivers</label></label>
+        <label class="perm-row"><input type="checkbox" id="pe-blockDrivers"><label for="pe-blockDrivers">Block Drivers</label></label>
+        <label class="perm-row"><input type="checkbox" id="pe-blockCustomers"><label for="pe-blockCustomers">Block Customers</label></label>
+        <label class="perm-row"><input type="checkbox" id="pe-manageWallets"><label for="pe-manageWallets">Manage Wallets</label></label>
+        <label class="perm-row"><input type="checkbox" id="pe-viewRides"><label for="pe-viewRides">View Rides</label></label>
+      </div>
+      <div id="sa-edit-err" style="color:#ef4444;font-size:.78rem;margin-top:.6rem;min-height:1em"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('sa-edit-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSubAdminPerms()">Save Permissions</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── User Detail / Action Modal ── -->
 <div class="modal-backdrop" id="user-modal">
@@ -577,6 +687,8 @@ let currentSOSFilter    = 'false';
 let currentSupStatus    = 'open';
 let maxIncome = 0;
 let selectedDriverIds   = new Set();
+let isSuperAdmin = true;   // false when a sub-admin is logged in
+let adminPerms   = {};     // permission flags from JWT payload
 
 // ── API Helper ────────────────────────────────────────────────────────────────
 async function api(path, method = 'GET', body = null) {
@@ -603,8 +715,10 @@ async function adminLogin() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    adminToken = data.token;
-    adminEmail = data.admin.email;
+    adminToken   = data.token;
+    adminEmail   = data.admin.email;
+    isSuperAdmin = true;
+    adminPerms   = {};
     localStorage.setItem('admin_token', adminToken);
     localStorage.setItem('admin_email', adminEmail);
     bootAdmin();
@@ -615,9 +729,41 @@ function adminLogout() {
   localStorage.removeItem('admin_token');
   localStorage.removeItem('admin_email');
   adminToken = null;
+  isSuperAdmin = true;
+  adminPerms = {};
   if (socket) socket.disconnect();
   document.getElementById('admin-app').style.display = 'none';
   document.getElementById('auth-overlay').style.display = 'flex';
+}
+
+function switchAuthTab(type) {
+  document.getElementById('tab-superadmin').classList.toggle('active', type === 'superadmin');
+  document.getElementById('tab-subadmin').classList.toggle('active', type === 'subadmin');
+  document.getElementById('auth-form-superadmin').style.display = type === 'superadmin' ? '' : 'none';
+  document.getElementById('auth-form-subadmin').style.display   = type === 'subadmin'   ? '' : 'none';
+  document.getElementById('a-err').textContent = '';
+}
+
+async function subAdminLogin() {
+  const username = document.getElementById('sa-username').value.trim();
+  const pass     = document.getElementById('sa-pass').value;
+  document.getElementById('a-err').textContent = '';
+  try {
+    const res = await fetch('/api/admin/sub-user/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password: pass })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    adminToken   = data.token;
+    adminEmail   = data.subAdmin.username;
+    isSuperAdmin = false;
+    adminPerms   = data.subAdmin.permissions || {};
+    localStorage.setItem('admin_token', adminToken);
+    localStorage.setItem('admin_email', adminEmail);
+    bootAdmin();
+  } catch (e) { document.getElementById('a-err').textContent = e.message; }
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -625,6 +771,7 @@ function bootAdmin() {
   document.getElementById('auth-overlay').style.display = 'none';
   document.getElementById('admin-app').style.display    = 'flex';
   document.getElementById('admin-email-lbl').textContent = adminEmail;
+  applyPermissions();
   connectSocket();
   loadOverview();
   loadStats();
@@ -687,7 +834,8 @@ const SECTION_TITLES = {
   passengers:'Passengers Directory', 'new-requests':'New Driver Requests',
   'temp-blocked':'Temporarily Blocked Drivers', 'blk-pass':'Blocked Passengers',
   'live-rides':'Live Rides & History', sos:'SOS Alert Monitor',
-  'pay-settings':'Payment Settings', ratings:'Ratings & Feedback', support:'Support Tickets'
+  'pay-settings':'Payment Settings', ratings:'Ratings & Feedback', support:'Support Tickets',
+  'sub-admins':'Sub-Admin User Management'
 };
 function showSection(name) {
   document.querySelectorAll('.sb-item').forEach(el => el.classList.toggle('active', el.dataset.sec === name));
@@ -705,7 +853,8 @@ function showSection(name) {
     'new-requests': loadNewRequests, 'temp-blocked': loadTempBlocked,
     'blk-pass': loadBlockedPass, 'live-rides': () => loadRides(currentRideStatus),
     sos: () => loadSOS(currentSOSFilter), 'pay-settings': loadPaymentSettings,
-    ratings: loadRatings, support: () => loadSupportTickets(currentSupStatus)
+    ratings: loadRatings, support: () => loadSupportTickets(currentSupStatus),
+    'sub-admins': loadSubAdmins
   };
   loaders[name]?.();
 }
@@ -786,7 +935,7 @@ async function loadPayments(status = 'pending') {
           ${p.adminNote ? `<div class="pay-meta" style="color:#64748b;margin-top:.2rem">💬 ${p.adminNote}</div>` : ''}
         </div>
         <div class="pay-amount">Rs ${(p.amount||0).toLocaleString()}</div>
-        ${isPending ? `<div class="pay-actions">
+        ${isPending && (isSuperAdmin || adminPerms.manageWallets) ? `<div class="pay-actions">
           <button class="btn btn-green" onclick="approvePayment('${p._id}')">✓ Approve</button>
           <button class="btn btn-red"   onclick="rejectPayment('${p._id}')">✕ Reject</button>
         </div>` : ''}
@@ -840,13 +989,13 @@ async function loadDrivers(status = 'all') {
         <td><div style="display:flex;gap:.3rem;flex-wrap:wrap">
           <button class="btn btn-blue"   onclick="viewUser('${d._id}','driver')">👁</button>
           <button class="btn btn-gray"   onclick="viewDocs('${d._id}')">📄</button>
-          <button class="btn btn-yellow" onclick="grantTrial('${d._id}')" title="Grant 1-Month Free Trial">🎁</button>
-          ${d.accountStatus==='pending'   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','approve','driver')">✓</button>` : ''}
-          ${d.accountStatus==='active'    ? `<button class="btn btn-yellow" onclick="userAction('${d._id}','suspend','driver')">⏸</button>
+          ${(isSuperAdmin||adminPerms.manageWallets) ? `<button class="btn btn-yellow" onclick="grantTrial('${d._id}')" title="Grant 1-Month Free Trial">🎁</button>` : ''}
+          ${d.accountStatus==='pending'   && (isSuperAdmin||adminPerms.approveDrivers) ? `<button class="btn btn-green"  onclick="userAction('${d._id}','approve','driver')">✓</button>` : ''}
+          ${d.accountStatus==='active'    && (isSuperAdmin||adminPerms.blockDrivers)   ? `<button class="btn btn-yellow" onclick="userAction('${d._id}','suspend','driver')">⏸</button>
             <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔</button>` : ''}
-          ${d.accountStatus==='suspended' ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>
+          ${d.accountStatus==='suspended' && (isSuperAdmin||adminPerms.blockDrivers)   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>
             <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">⛔</button>` : ''}
-          ${d.accountStatus==='blocked'   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>` : ''}
+          ${d.accountStatus==='blocked'   && (isSuperAdmin||adminPerms.blockDrivers)   ? `<button class="btn btn-green"  onclick="userAction('${d._id}','unblock','driver')">▶</button>` : ''}
         </div></td>
       </tr>`;
     }).join('');
@@ -869,9 +1018,9 @@ async function loadPassengers(status = 'all') {
       <td style="font-size:.72rem;color:#475569">${fmtDate(p.createdAt)}</td>
       <td><div style="display:flex;gap:.3rem">
         <button class="btn btn-blue" onclick="viewUser('${p._id}','customer')">👁</button>
-        ${(p.accountStatus==='blocked')
+        ${(isSuperAdmin||adminPerms.blockCustomers) ? ((p.accountStatus==='blocked')
           ? `<button class="btn btn-green" onclick="userAction('${p._id}','unblock','customer')">▶ Unblock</button>`
-          : `<button class="btn btn-red"   onclick="userAction('${p._id}','block','customer')">⛔ Block</button>`}
+          : `<button class="btn btn-red"   onclick="userAction('${p._id}','block','customer')">⛔ Block</button>`) : ''}
       </div></td>
     </tr>`).join('');
   } catch (e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
@@ -891,8 +1040,8 @@ async function loadNewRequests() {
       <td style="font-size:.72rem;color:#475569">${fmtDate(d.createdAt)}</td>
       <td><button class="btn btn-blue" onclick="viewDocs('${d._id}','${encodeURIComponent(JSON.stringify({name:d.name,phone:d.phone||'',vehicleType:d.vehicleType||'',vehicleModel:d.vehicleModel||'',vehiclePlate:d.vehiclePlate||''}))}')">📄 View Docs</button></td>
       <td><div style="display:flex;gap:.3rem">
-        <button class="btn btn-green" onclick="userAction('${d._id}','approve','driver')">✓ Approve</button>
-        <button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">✕ Reject</button>
+        ${(isSuperAdmin||adminPerms.approveDrivers) ? `<button class="btn btn-green" onclick="userAction('${d._id}','approve','driver')">✓ Approve</button>` : ''}
+        ${(isSuperAdmin||adminPerms.blockDrivers)   ? `<button class="btn btn-red"   onclick="userAction('${d._id}','block','driver')">✕ Reject</button>` : ''}
       </div></td>
     </tr>`).join('');
   } catch (e) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
@@ -1099,10 +1248,14 @@ async function viewUser(userId, role) {
 
     // Footer action buttons
     const btns = [];
-    if (u.accountStatus === 'pending')   btns.push(`<button class="btn btn-green" onclick="closeModal('user-modal');userAction('${u._id}','approve','${role}')">✓ Approve</button>`);
-    if (u.accountStatus === 'active')    btns.push(`<button class="btn btn-yellow" onclick="closeModal('user-modal');userAction('${u._id}','suspend','${role}')">⏸ Suspend</button><button class="btn btn-red" onclick="closeModal('user-modal');userAction('${u._id}','block','${role}')">⛔ Block</button>`);
-    if (u.accountStatus === 'suspended') btns.push(`<button class="btn btn-green" onclick="closeModal('user-modal');userAction('${u._id}','unblock','${role}')">▶ Activate</button>`);
-    if (u.accountStatus === 'blocked')   btns.push(`<button class="btn btn-green" onclick="closeModal('user-modal');userAction('${u._id}','unblock','${role}')">▶ Unblock</button>`);
+    const canApprove = isSuperAdmin || adminPerms.approveDrivers;
+    const canActDrv  = isSuperAdmin || adminPerms.blockDrivers;
+    const canActCust = isSuperAdmin || adminPerms.blockCustomers;
+    const canAct     = role === 'driver' ? canActDrv : canActCust;
+    if (u.accountStatus === 'pending'   && canApprove) btns.push(`<button class="btn btn-green"  onclick="closeModal('user-modal');userAction('${u._id}','approve','${role}')">✓ Approve</button>`);
+    if (u.accountStatus === 'active'    && canAct)     btns.push(`<button class="btn btn-yellow" onclick="closeModal('user-modal');userAction('${u._id}','suspend','${role}')">⏸ Suspend</button><button class="btn btn-red" onclick="closeModal('user-modal');userAction('${u._id}','block','${role}')">⛔ Block</button>`);
+    if (u.accountStatus === 'suspended' && canAct)     btns.push(`<button class="btn btn-green"  onclick="closeModal('user-modal');userAction('${u._id}','unblock','${role}')">▶ Activate</button>`);
+    if (u.accountStatus === 'blocked'   && canAct)     btns.push(`<button class="btn btn-green"  onclick="closeModal('user-modal');userAction('${u._id}','unblock','${role}')">▶ Unblock</button>`);
     if (role === 'driver')               btns.push(`<button class="btn btn-blue" onclick="closeModal('user-modal');viewDocs('${u._id}')">📄 View Docs</button>`);
     footer.innerHTML = `<button class="btn btn-gray" onclick="closeModal('user-modal')">Close</button>${btns.join('')}`;
   } catch (e) { body.innerHTML = `<div class="empty-state" style="color:#ef4444">${e.message}</div>`; }
@@ -1315,6 +1468,145 @@ async function savePaymentSettings() {
   }
 }
 
+// ── Permission Enforcement ────────────────────────────────────────────────────
+function applyPermissions() {
+  const sa = isSuperAdmin;
+  const p  = adminPerms;
+
+  // Sub-admin users tab — super-admin only
+  const sbSA = document.getElementById('sb-sub-admins');
+  if (sbSA) sbSA.style.display = sa ? '' : 'none';
+
+  // Payment settings tab — super-admin only
+  const sbPS = document.querySelector('[data-sec="pay-settings"]');
+  if (sbPS) sbPS.style.display = sa ? '' : 'none';
+
+  // Payments tab — needs manageWallets
+  const sbPay = document.querySelector('[data-sec="payments"]');
+  if (sbPay) sbPay.style.display = (sa || p.manageWallets) ? '' : 'none';
+
+  // Live rides tab — needs viewRides
+  const sbRides = document.querySelector('[data-sec="live-rides"]');
+  if (sbRides) sbRides.style.display = (sa || p.viewRides) ? '' : 'none';
+
+  // New Requests / Temp Blocked tabs — needs approveDrivers or blockDrivers
+  const sbNR = document.querySelector('[data-sec="new-requests"]');
+  if (sbNR) sbNR.style.display = (sa || p.approveDrivers || p.blockDrivers) ? '' : 'none';
+  const sbTB = document.querySelector('[data-sec="temp-blocked"]');
+  if (sbTB) sbTB.style.display = (sa || p.blockDrivers) ? '' : 'none';
+  const sbBP = document.querySelector('[data-sec="blk-pass"]');
+  if (sbBP) sbBP.style.display = (sa || p.blockCustomers) ? '' : 'none';
+
+  // Bulk trial grant button inside drivers panel
+  const bulkBtn = document.getElementById('bulk-trial-btn');
+  if (bulkBtn) bulkBtn.style.display = (sa || p.manageWallets) ? '' : 'none';
+
+  // Show a banner when logged in as sub-admin
+  const lbl = document.getElementById('admin-email-lbl');
+  if (!sa) lbl.textContent = `👤 ${adminEmail} (sub-admin)`;
+}
+
+// ── Sub-Admin Management ──────────────────────────────────────────────────────
+async function loadSubAdmins() {
+  const tbody = document.getElementById('sa-tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="loading-row">Loading…</td></tr>';
+  try {
+    const subs = await api('/api/admin/sub-users/list');
+    document.getElementById('sa-count').textContent = subs.length;
+    if (!subs.length) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><span class="empty-icon">👤</span>No sub-admin accounts yet. Create one to get started.</div></td></tr>';
+      return;
+    }
+    const chip = (on) => `<span class="perm-chip ${on ? 'perm-on' : 'perm-off'}">${on ? '✓' : '—'}</span>`;
+    tbody.innerHTML = subs.map(s => {
+      const pr = s.permissions || {};
+      const permsJson = JSON.stringify(pr).replace(/"/g, '&quot;');
+      return `<tr>
+        <td><strong style="color:#e2e8f0">${s.username}</strong></td>
+        <td style="text-align:center">${chip(pr.approveDrivers)}</td>
+        <td style="text-align:center">${chip(pr.blockDrivers)}</td>
+        <td style="text-align:center">${chip(pr.blockCustomers)}</td>
+        <td style="text-align:center">${chip(pr.manageWallets)}</td>
+        <td style="text-align:center">${chip(pr.viewRides)}</td>
+        <td style="font-size:.72rem;color:#475569">${fmtDate(s.createdAt)}</td>
+        <td><div style="display:flex;gap:.3rem">
+          <button class="btn btn-blue" onclick="editSubAdmin('${s._id}','${s.username}','${permsJson}')">✏️ Edit</button>
+          <button class="btn btn-red"  onclick="deleteSubAdmin('${s._id}','${s.username}')">🗑</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:1rem">${e.message}</td></tr>`; }
+}
+
+function openCreateSubAdmin() {
+  ['pn-approveDrivers','pn-blockDrivers','pn-blockCustomers','pn-manageWallets'].forEach(id => { document.getElementById(id).checked = false; });
+  document.getElementById('pn-viewRides').checked = true;
+  document.getElementById('sa-new-username').value = '';
+  document.getElementById('sa-new-password').value = '';
+  document.getElementById('sa-create-err').textContent = '';
+  openModal('sa-create-modal');
+}
+
+async function createSubAdmin() {
+  const username = document.getElementById('sa-new-username').value.trim();
+  const password = document.getElementById('sa-new-password').value;
+  const errEl    = document.getElementById('sa-create-err');
+  errEl.textContent = '';
+  if (!username || !password) { errEl.textContent = 'Username and password are required.'; return; }
+  const permissions = {
+    approveDrivers: document.getElementById('pn-approveDrivers').checked,
+    blockDrivers:   document.getElementById('pn-blockDrivers').checked,
+    blockCustomers: document.getElementById('pn-blockCustomers').checked,
+    manageWallets:  document.getElementById('pn-manageWallets').checked,
+    viewRides:      document.getElementById('pn-viewRides').checked
+  };
+  try {
+    await api('/api/admin/sub-users/create', 'POST', { username, password, permissions });
+    closeModal('sa-create-modal');
+    showToast(`Sub-admin '${username}' created ✓`, 'success');
+    loadSubAdmins();
+  } catch (e) { errEl.textContent = e.message; }
+}
+
+function editSubAdmin(id, username, permsRaw) {
+  const pr = (typeof permsRaw === 'string') ? JSON.parse(permsRaw.replace(/&quot;/g, '"')) : permsRaw;
+  document.getElementById('sa-edit-id').value = id;
+  document.getElementById('sa-edit-title').textContent = `✏️ Edit: ${username}`;
+  document.getElementById('pe-approveDrivers').checked = !!pr.approveDrivers;
+  document.getElementById('pe-blockDrivers').checked   = !!pr.blockDrivers;
+  document.getElementById('pe-blockCustomers').checked = !!pr.blockCustomers;
+  document.getElementById('pe-manageWallets').checked  = !!pr.manageWallets;
+  document.getElementById('pe-viewRides').checked      = pr.viewRides !== false;
+  document.getElementById('sa-edit-err').textContent   = '';
+  openModal('sa-edit-modal');
+}
+
+async function saveSubAdminPerms() {
+  const id = document.getElementById('sa-edit-id').value;
+  const permissions = {
+    approveDrivers: document.getElementById('pe-approveDrivers').checked,
+    blockDrivers:   document.getElementById('pe-blockDrivers').checked,
+    blockCustomers: document.getElementById('pe-blockCustomers').checked,
+    manageWallets:  document.getElementById('pe-manageWallets').checked,
+    viewRides:      document.getElementById('pe-viewRides').checked
+  };
+  try {
+    await api('/api/admin/sub-users/update-permissions', 'PUT', { id, permissions });
+    closeModal('sa-edit-modal');
+    showToast('Permissions updated ✓', 'success');
+    loadSubAdmins();
+  } catch (e) { document.getElementById('sa-edit-err').textContent = e.message; }
+}
+
+async function deleteSubAdmin(id, username) {
+  if (!confirm(`Delete sub-admin '${username}'? This cannot be undone.`)) return;
+  try {
+    await api(`/api/admin/sub-users/delete/${id}`, 'DELETE');
+    showToast(`'${username}' deleted`, 'error');
+    loadSubAdmins();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
@@ -1322,8 +1614,21 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-if (adminToken) bootAdmin();
-else document.getElementById('auth-overlay').style.display = 'flex';
+if (adminToken) {
+  // Decode stored JWT to restore isSuperAdmin + adminPerms
+  try {
+    const parts = adminToken.split('.');
+    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    if (payload.isSubAdmin) {
+      isSuperAdmin = false;
+      adminPerms   = payload.permissions || {};
+    } else {
+      isSuperAdmin = true;
+      adminPerms   = {};
+    }
+  } catch { /* invalid token; bootAdmin will fail and show auth */ }
+  bootAdmin();
+} else document.getElementById('auth-overlay').style.display = 'flex';
 </script>
 </body>
 </html>

@@ -212,6 +212,20 @@ const walletSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
+// Sub-Admin schema — granular-permission secondary admin accounts (max 50)
+const subAdminSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true, trim: true },
+  password: { type: String, required: true },
+  permissions: {
+    approveDrivers: { type: Boolean, default: false },
+    blockDrivers:   { type: Boolean, default: false },
+    blockCustomers: { type: Boolean, default: false },
+    manageWallets:  { type: Boolean, default: false },
+    viewRides:      { type: Boolean, default: true  }
+  }
+}, { timestamps: true });
+const SubAdmin = mongoose.model('SubAdmin', subAdminSchema);
+
 const sosSchema = new mongoose.Schema({
   user:     { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   location: { lat: Number, lng: Number },
@@ -309,16 +323,33 @@ async function adminMiddleware(req, res, next) {
   } catch (err) { res.status(500).json({ error: err.message }); }
 }
 
-// New: self-contained — verifies admin JWT claim (no DB lookup)
+// New: accepts both super-admin JWTs (isAdmin:true) and sub-admin JWTs (isSubAdmin:true)
 function adminJwt(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Admin token required' });
   try {
     const payload = jwt.verify(auth.slice(7), JWT_SECRET);
-    if (!payload.isAdmin) return res.status(403).json({ error: 'Admin access required' });
-    req.admin = payload;
-    next();
+    if (payload.isAdmin)    { req.admin = { ...payload, isSuperAdmin: true  }; return next(); }
+    if (payload.isSubAdmin) { req.admin = { ...payload, isSuperAdmin: false }; return next(); }
+    return res.status(403).json({ error: 'Admin access required' });
   } catch { return res.status(401).json({ error: 'Invalid or expired admin token' }); }
+}
+
+// Super-admin-only guard — sub-admins are always rejected
+function requireSuperAdmin(req, res, next) {
+  if (!req.admin?.isSuperAdmin) return res.status(403).json({ error: 'Super-admin access required' });
+  next();
+}
+
+// Permission guard — super-admins always pass; sub-admins need the named flag
+function requirePerm(permName) {
+  return (req, res, next) => {
+    if (!req.admin) return res.status(401).json({ error: 'Admin token required' });
+    if (req.admin.isSuperAdmin) return next();
+    if (!req.admin.permissions?.[permName])
+      return res.status(403).json({ error: `Permission denied: ${permName} required` });
+    next();
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1202,6 +1233,83 @@ app.post('/api/admin/login', (req, res) => {
   res.json({ token, admin: { email } });
 });
 
+// POST /api/admin/sub-user/login — sub-admin credential login
+app.post('/api/admin/sub-user/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    const sub = await SubAdmin.findOne({ username: username.trim() });
+    if (!sub) return res.status(401).json({ error: 'Invalid credentials' });
+    const match = await bcrypt.compare(password, sub.password);
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+    const token = jwt.sign(
+      { isSubAdmin: true, subAdminId: sub._id, username: sub.username, permissions: sub.permissions },
+      JWT_SECRET, { expiresIn: '8h' }
+    );
+    res.json({ token, subAdmin: { id: sub._id, username: sub.username, permissions: sub.permissions } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/admin/sub-users/create — super-admin only; enforces 50-user cap
+app.post('/api/admin/sub-users/create', adminJwt, requireSuperAdmin, async (req, res) => {
+  try {
+    const count = await SubAdmin.countDocuments();
+    if (count >= 50) return res.status(400).json({ error: 'Maximum limit of 50 sub-admin users reached.' });
+    const { username, password, permissions } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    if (await SubAdmin.findOne({ username: username.trim() }))
+      return res.status(409).json({ error: 'Username already taken' });
+    const hashed = await bcrypt.hash(password, 10);
+    const sub = await SubAdmin.create({
+      username: username.trim(), password: hashed,
+      permissions: {
+        approveDrivers: !!permissions?.approveDrivers,
+        blockDrivers:   !!permissions?.blockDrivers,
+        blockCustomers: !!permissions?.blockCustomers,
+        manageWallets:  !!permissions?.manageWallets,
+        viewRides:      permissions?.viewRides !== false
+      }
+    });
+    res.json({ success: true, subAdmin: { id: sub._id, username: sub.username, permissions: sub.permissions, createdAt: sub.createdAt } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/admin/sub-users/list
+app.get('/api/admin/sub-users/list', adminJwt, requireSuperAdmin, async (req, res) => {
+  try {
+    const subs = await SubAdmin.find().select('-password').sort('-createdAt');
+    res.json(subs);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/admin/sub-users/update-permissions
+app.put('/api/admin/sub-users/update-permissions', adminJwt, requireSuperAdmin, async (req, res) => {
+  try {
+    const { id, permissions } = req.body;
+    if (!id || !permissions) return res.status(400).json({ error: 'id and permissions required' });
+    const sub = await SubAdmin.findByIdAndUpdate(id,
+      { $set: { permissions: {
+        approveDrivers: !!permissions.approveDrivers,
+        blockDrivers:   !!permissions.blockDrivers,
+        blockCustomers: !!permissions.blockCustomers,
+        manageWallets:  !!permissions.manageWallets,
+        viewRides:      permissions.viewRides !== false
+      }}}, { new: true }
+    ).select('-password');
+    if (!sub) return res.status(404).json({ error: 'Sub-admin not found' });
+    res.json({ success: true, subAdmin: sub });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/admin/sub-users/delete/:id
+app.delete('/api/admin/sub-users/delete/:id', adminJwt, requireSuperAdmin, async (req, res) => {
+  try {
+    const sub = await SubAdmin.findByIdAndDelete(req.params.id);
+    if (!sub) return res.status(404).json({ error: 'Sub-admin not found' });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/admin/stats — overview dashboard numbers
 app.get('/api/admin/stats', adminJwt, async (req, res) => {
   try {
@@ -1266,6 +1374,19 @@ app.get('/api/admin/passengers', adminJwt, async (req, res) => {
 app.patch('/api/admin/users/:id/status', adminJwt, async (req, res) => {
   try {
     const { action, reason } = req.body;
+
+    // Sub-admin permission enforcement per action + target role
+    if (!req.admin.isSuperAdmin) {
+      const target = await User.findById(req.params.id).select('role');
+      if (!target) return res.status(404).json({ error: 'User not found' });
+      if (action === 'approve' && !req.admin.permissions?.approveDrivers)
+        return res.status(403).json({ error: 'Permission denied: approveDrivers required' });
+      if (['suspend','block','unblock'].includes(action) && target.role === 'driver' && !req.admin.permissions?.blockDrivers)
+        return res.status(403).json({ error: 'Permission denied: blockDrivers required' });
+      if (['block','unblock'].includes(action) && target.role === 'customer' && !req.admin.permissions?.blockCustomers)
+        return res.status(403).json({ error: 'Permission denied: blockCustomers required' });
+    }
+
     let update = {};
     if      (action === 'approve')  update = { accountStatus: 'active',    suspendReason: '', suspendedAt: null };
     else if (action === 'suspend')  update = { accountStatus: 'suspended', suspendReason: reason || 'Temporary suspension', suspendedAt: new Date() };
@@ -1286,7 +1407,7 @@ app.patch('/api/admin/users/:id/status', adminJwt, async (req, res) => {
 });
 
 // GET /api/admin/rides?status=active|completed|cancelled|all&date=YYYY-MM-DD
-app.get('/api/admin/rides', adminJwt, async (req, res) => {
+app.get('/api/admin/rides', adminJwt, requirePerm('viewRides'), async (req, res) => {
   try {
     const { status, date } = req.query;
     const filter = {};
@@ -1340,7 +1461,7 @@ app.get('/api/admin/payments', adminJwt, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.patch('/api/admin/payments/:id/approve', adminJwt, async (req, res) => {
+app.patch('/api/admin/payments/:id/approve', adminJwt, requirePerm('manageWallets'), async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id);
     if (!payment) return res.status(404).json({ error: 'Not found' });
@@ -1352,7 +1473,7 @@ app.patch('/api/admin/payments/:id/approve', adminJwt, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.patch('/api/admin/payments/:id/reject', adminJwt, async (req, res) => {
+app.patch('/api/admin/payments/:id/reject', adminJwt, requirePerm('manageWallets'), async (req, res) => {
   try {
     const { reason } = req.body;
     const payment = await Payment.findById(req.params.id);
@@ -1554,7 +1675,7 @@ app.get('/api/admin/ratings', adminJwt, async (req, res) => {
 
 const TRIAL_AMOUNTS = { 'Bike': 2000, 'Rickshaw': 3000, 'Car Mini': 4500, 'Car AC': 6500 };
 
-app.post('/api/admin/drivers/grant-trial', adminJwt, async (req, res) => {
+app.post('/api/admin/drivers/grant-trial', adminJwt, requirePerm('manageWallets'), async (req, res) => {
   try {
     const { driverIds } = req.body; // array of user IDs
     if (!Array.isArray(driverIds) || !driverIds.length)
