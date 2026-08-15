@@ -40,6 +40,20 @@ app.get('/api',    (_req, res) => res.status(200).json({ status: 'ok' }));
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
+// ── Request body timeout ──────────────────────────────────────────────────
+// Drivers on 2G/3G can take 30–90 s to push four compressed photos (~1 MB
+// at 100–300 kbps). We set server.requestTimeout explicitly so the value is
+// visible, intentional, and configurable — leaving it implicit risks an
+// accidental reduction by a framework upgrade or deployment change.
+//
+// The Node 18+ default is 300 000 ms; we raise it to 600 000 ms (10 min)
+// to comfortably cover worst-case 2G uploads without silently cutting drivers
+// off mid-transfer.
+//
+// REQUEST_TIMEOUT_MS env var overrides the value so integration tests can use
+// a shorter window (e.g. REQUEST_TIMEOUT_MS=8000) without waiting 10 minutes.
+server.requestTimeout = parseInt(process.env.REQUEST_TIMEOUT_MS || '600000', 10);
+
 // ── 4. START LISTENING IMMEDIATELY ───────────────────────────────────────
 // Bind the port right after healthchecks so the OS accepts connections and
 // deployment probes succeed while DB connects asynchronously in the background.
@@ -2326,4 +2340,3 @@ async function runDailyDeduction() {
   scheduleNext();
   console.log(`⏰ Daily deduction scheduled (next run at UTC midnight)`);
 })();
-
