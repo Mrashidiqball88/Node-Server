@@ -877,6 +877,21 @@ app.patch('/api/rides/:id/counter', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/driver/active-ride — returns the in-progress ride for the authenticated driver
+// Used by the driver's Refresh button to force-sync UI after a freeze or missed event
+app.get('/api/driver/active-ride', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'driver') return res.status(403).json({ error: 'Drivers only' });
+    const ride = await Ride.findOne({
+      driver: req.user.id,
+      status: { $in: ['accepted', 'arrived', 'in-progress'] }
+    }).populate('passenger', 'name phone').lean();
+    res.json({ ride: ride || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/rides/:id/accept-driver — customer selects a specific driver
 app.patch('/api/rides/:id/accept-driver', authMiddleware, async (req, res) => {
   try {

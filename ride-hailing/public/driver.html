@@ -64,6 +64,9 @@ body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;height:100d
 #info-panel{background:#0d1117;border-top:1px solid #1e3a5f;padding:1rem;flex-shrink:0;max-height:45vh;overflow-y:auto}
 .idle-msg{text-align:center;color:#444;padding:1.5rem;font-size:.9rem}
 .idle-msg .idle-icon{font-size:2.5rem;margin-bottom:.5rem}
+.idle-refresh-btn{display:inline-block;background:#1a3a1a;color:#4caf50;border:1.5px solid #4caf50;border-radius:100px;padding:.45rem 1.2rem;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:.02em;transition:background .18s,color .18s}
+.idle-refresh-btn:hover{background:#4caf50;color:#0a0a0f}
+.idle-refresh-btn:disabled{opacity:.5;cursor:default}
 
 /* ── Incoming Ride Popup ── */
 #ride-request{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:#0d1117;border-top:2px solid #f5c518;padding:1rem;animation:slide-up .3s ease}
@@ -1156,7 +1159,7 @@ function toggleOnline(online) {
     ? 'Waiting for ride requests…'
     : 'Toggle to go online and receive ride requests';
   document.getElementById('idle-msg').innerHTML = online
-    ? '<div class="idle-icon">🟢</div><div>You\'re online! Waiting for ride requests near you…</div>'
+    ? '<button class="idle-refresh-btn" onclick="refreshDashboard()">🔄 Tap to Refresh Dashboard</button><div style="font-size:.72rem;color:#555;margin-top:.3rem">Waiting for ride requests near you…</div>'
     : '<div class="idle-icon">🛑</div><div>Toggle <strong>Online</strong> above to start receiving ride requests</div>';
   showToast(online ? 'You are now Online' : 'You went Offline', online ? 'success' : 'info');
 }
@@ -1243,20 +1246,22 @@ function connectSocket() {
   socket.on('ride:accepted', ({ rideId, driver }) => {
     if (sentOffer && String(sentOffer.rideId) === String(rideId)) {
       if (String(driver.id) === String(user.id)) {
-        // We were selected!
+        // We were selected — dismiss the "offer sent" card immediately
         sentOffer = null;
+        hideRideRequest();   // ← clears the waiting card right away
         apiCall(`/api/rides/${rideId}`)
           .then(ride => {
             activeRide = ride;
             showActivePanel(ride);
             showRideOnMap(ride);
             socket.emit('ride:join', rideId);
-            showToast('Customer accepted your offer! Head to pickup.', 'success');
+            showToast('🎉 Customer accepted your offer! Head to pickup.', 'success');
           })
           .catch(() => showToast('Ride accepted — loading details…', 'success'));
       } else {
         // Another driver was selected
         sentOffer = null;
+        hideRideRequest();   // ← also dismiss the card for the losing driver
         clearRideMap();
         showToast('Customer chose another driver', 'info');
       }
@@ -1277,13 +1282,25 @@ function connectSocket() {
     }
   });
 
-  // Ride status from passenger cancel
+  // Ride status from passenger cancel — covers all three driver states
   socket.on('ride:status', ({ rideId, status }) => {
+    if (status !== 'cancelled') return;
+
     if (activeRide && String(activeRide._id) === String(rideId)) {
-      if (status === 'cancelled') {
-        showToast('Passenger cancelled the ride', 'error');
-        endActiveRide();
-      }
+      // Passenger cancelled an in-progress/accepted ride
+      showToast('⚠️ Passenger cancelled the ride', 'error');
+      endActiveRide();
+    } else if (sentOffer && String(sentOffer.rideId) === String(rideId)) {
+      // Passenger cancelled while driver was waiting for their counter-offer to be picked
+      sentOffer = null;
+      hideRideRequest();
+      clearRideMap();
+      showToast('⚠️ Passenger cancelled — your offer was not chosen', 'error');
+    } else if (pendingRide && String(pendingRide.id) === String(rideId)) {
+      // Passenger cancelled while the ride card was still showing
+      hideRideRequest();
+      clearRideMap();
+      showToast('⚠️ Passenger cancelled the ride request', 'error');
     }
   });
 }
@@ -1514,6 +1531,9 @@ async function sendCounter() {
 function showActivePanel(ride) {
   document.getElementById('info-panel').style.display   = 'none';
   document.getElementById('active-panel').style.display = 'block';
+  // Repaint map tiles — the panel swap can leave a black frame on slow devices
+  setTimeout(() => map?.invalidateSize(), 150);
+  setTimeout(() => map?.invalidateSize(), 600);
   document.getElementById('ap-status-text').textContent    = 'On the way to pickup';
   document.getElementById('ap-passenger-name').textContent = ride.passenger?.name || 'Passenger';
   document.getElementById('ap-pickup').textContent         = ride.pickupLocation?.address  || 'Pickup';
@@ -1588,14 +1608,45 @@ function endActiveRide() {
   clearRideMap();
 
   // Leave the completed ride's socket room so stale events don't bleed through
+  // NOTE: the socket itself is intentionally kept alive so new ride notifications
+  // (bell + audio alerts) keep working without requiring a logout/login cycle.
   if (finishedRideId && socket) socket.emit('ride:leave', String(finishedRideId));
 
-  // Map tiles go blank when the container was hidden — invalidate after reflow
+  // Map tiles go blank when the container was re-shown after being hidden.
+  // Three staggered calls cover slow repaints on Android and low-end iOS.
   setTimeout(() => map?.invalidateSize(), 150);
   setTimeout(() => map?.invalidateSize(), 600);
+  setTimeout(() => map?.invalidateSize(), 1200);
 
   // Re-check support-ticket badge so the bell reflects the real unread count
   checkUnreadDriverTickets();
+}
+
+// ── Force-sync dashboard state from server (called by the Refresh button) ──
+async function refreshDashboard() {
+  const btn = document.querySelector('.idle-refresh-btn');
+  if (btn) { btn.textContent = '⏳ Refreshing…'; btn.disabled = true; }
+  try {
+    const { ride } = await apiCall('/api/driver/active-ride');
+    if (ride) {
+      // Server has an active ride we don't know about — restore it
+      activeRide = ride;
+      showActivePanel(ride);
+      showRideOnMap(ride);
+      if (socket) socket.emit('ride:join', String(ride._id));
+      showToast('Dashboard synced — active ride restored', 'success');
+    } else {
+      // No active ride — make sure we're showing idle state
+      if (activeRide) endActiveRide();
+      showToast('Dashboard synced — no active ride', 'info');
+    }
+    // Ensure socket rooms are correct
+    if (socket && isOnline) socket.emit('driver:status', { isOnline: true });
+  } catch (e) {
+    showToast('Refresh failed — check connection', 'error');
+  } finally {
+    if (btn) { btn.textContent = '🔄 Tap to Refresh Dashboard'; btn.disabled = false; }
+  }
 }
 
 // ── Bottom Tab Navigation ──────────────────────────────────────────────────
