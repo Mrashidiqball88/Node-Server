@@ -4,7 +4,7 @@
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
-const { computeBackfillPaidUntil } = require('../lib/backfillPaidUntil');
+const { computeBackfillPaidUntil } = require('./lib/backfillPaidUntil');
 
 // ─── Global crash protection ──────────────────────────────────────────────────
 // Catch any unhandled error/rejection so the server never exits unexpectedly.
